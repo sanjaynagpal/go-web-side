@@ -42,7 +42,7 @@
       transition: background-color .35s, color .35s, border-color .35s, box-shadow .35s !important;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: var(--fs-md)/1.5 system-ui, "Segoe UI", sans-serif; }
+    body { min-width: 480px; margin: 0; background: var(--bg); color: var(--text); font: var(--fs-md)/1.5 system-ui, "Segoe UI", sans-serif; }
     main { max-width: 640px; margin: 0 auto; padding: var(--s-5) var(--s-4) 40px; }
     h1 { margin: 0; font-size: var(--fs-xl); font-weight: 650; letter-spacing: -.01em; line-height: 1.25; }
     .sub { margin: 2px 0 0; color: var(--muted); font-size: var(--fs-sm); }
@@ -166,8 +166,8 @@
     .tile-title { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
     .badge { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px 1px 6px; border-radius: var(--r-pill); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
     .badge .ico { width: 14px; height: 14px; }
-    .badge.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
-    .badge.none { color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent); padding-left: 9px; }
+    .badge.ok { color: color-mix(in srgb, var(--ok) 85%, var(--text)); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+    .badge.none { color: color-mix(in srgb, var(--muted) 85%, var(--text)); background: color-mix(in srgb, var(--muted) 14%, transparent); padding-left: 9px; }
     .tile-path { display: flex; align-items: center; gap: var(--s-1); min-width: 0; color: var(--muted); font-size: var(--fs-xs); }
     .tile-path code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--fs-xs) ui-monospace, "Cascadia Mono", Consolas, monospace; }
     .copy { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--r-sm);
@@ -272,13 +272,13 @@
     <p class="note" id="platform-note" hidden style="margin:12px 0 0"></p>
   </div>
 
-  <div class="tabs" role="tablist">
-    <button role="tab" data-tab="install" aria-selected="true"><svg class="ico"><use href="#i-install"/></svg>Install</button>
-    <button role="tab" data-tab="uninstall" aria-selected="false"><svg class="ico"><use href="#i-trash"/></svg>Uninstall</button>
-    <button role="tab" data-tab="doctor" aria-selected="false"><svg class="ico"><use href="#i-pulse"/></svg>Doctor</button>
+  <div class="tabs" role="tablist" aria-label="Actions">
+    <button role="tab" id="tab-install" data-tab="install" aria-selected="true" aria-controls="install" tabindex="0"><svg class="ico"><use href="#i-install"/></svg>Install</button>
+    <button role="tab" id="tab-uninstall" data-tab="uninstall" aria-selected="false" aria-controls="uninstall" tabindex="-1"><svg class="ico"><use href="#i-trash"/></svg>Uninstall</button>
+    <button role="tab" id="tab-doctor" data-tab="doctor" aria-selected="false" aria-controls="doctor" tabindex="-1"><svg class="ico"><use href="#i-pulse"/></svg>Doctor</button>
   </div>
 
-  <section id="install" class="card">
+  <section id="install" class="card" role="tabpanel" aria-labelledby="tab-install">
     <label class="opt"><input type="radio" name="iscope" value="user" checked> Just for me
       <small>Installs to your profile. No administrator permission needed.</small></label>
     <label class="opt"><input type="radio" name="iscope" value="machine"> For all users on this computer
@@ -294,12 +294,12 @@
     <div class="actions"><button class="primary" id="do-install">Install</button><span class="why" id="why-do-install"></span></div>
   </section>
 
-  <section id="uninstall" class="card hidden">
+  <section id="uninstall" class="card hidden" role="tabpanel" aria-labelledby="tab-uninstall">
     <div id="uninstall-options"></div>
     <div class="actions"><button class="primary" id="do-uninstall">Uninstall</button><span class="why" id="why-do-uninstall"></span></div>
   </section>
 
-  <section id="doctor" class="card hidden">
+  <section id="doctor" class="card hidden" role="tabpanel" aria-labelledby="tab-doctor">
     <p class="note">Checks the registry record, files and version of every S-Lab installation. Nothing is changed.</p>
     <div class="actions"><button class="primary" id="do-doctor">Run diagnostics</button><span class="why" id="why-do-doctor"></span></div>
   </section>
@@ -646,11 +646,33 @@ document.addEventListener("click", async (e) => {
 });
 
 function goTab(name) {
-  document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", x.dataset.tab === name));
+  document.querySelectorAll(".tabs button").forEach((x) => {
+    x.setAttribute("aria-selected", x.dataset.tab === name);
+    x.tabIndex = x.dataset.tab === name ? 0 : -1; // only the current tab is a Tab-key stop
+  });
   ["install", "uninstall", "doctor"].forEach((id) => $(id).classList.toggle("hidden", id !== name));
   $("result").classList.add("hidden");
 }
 document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => goTab(b.dataset.tab));
+
+// Arrow keys, Home and End move between tabs, as in a native tab control.
+document.querySelector(".tabs").addEventListener("keydown", (e) => {
+  const tabs = [...document.querySelectorAll(".tabs button")];
+  const i = tabs.indexOf(document.activeElement);
+  if (i < 0) return;
+  const to = { ArrowRight: (i + 1) % tabs.length, ArrowLeft: (i - 1 + tabs.length) % tabs.length, Home: 0, End: tabs.length - 1 }[e.key];
+  if (to === undefined) return;
+  e.preventDefault();
+  goTab(tabs[to].dataset.tab);
+  tabs[to].focus();
+});
+
+// Enter in a field submits that tab's action (Install or Uninstall), if it is available.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || !e.target.matches("input")) return;
+  const button = { install: $("do-install"), uninstall: $("do-uninstall") }[e.target.closest("section")?.id];
+  if (button && !button.disabled) { e.preventDefault(); button.click(); }
+});
 
 // "Next step" links inside empty states and results.
 document.addEventListener("click", (e) => {
@@ -685,10 +707,12 @@ paintTheme();
 
 // Fit the app window to the content so it neither wastes space nor scrolls.
 // Best effort: browsers that refuse window.resizeTo keep the launch size.
+// Below this inner size the layout (and the confirmation dialog) stop fitting.
+const MIN = { w: 520, h: 380 };
 function fitWindow() {
   const frameW = window.outerWidth - window.innerWidth;
   const frameH = window.outerHeight - window.innerHeight;
-  const h = Math.ceil(document.querySelector("main").getBoundingClientRect().height);
+  const h = Math.max(Math.ceil(document.querySelector("main").getBoundingClientRect().height), MIN.h);
   const w = 700 - frameW;
   const maxH = screen.availHeight;
   try { window.resizeTo(w + frameW, Math.min(h + frameH, maxH)); } catch {}
@@ -696,6 +720,16 @@ function fitWindow() {
 let fitTimer;
 new ResizeObserver(() => { clearTimeout(fitTimer); fitTimer = setTimeout(fitWindow, 50); })
   .observe(document.querySelector("main"));
+
+// Stop the window being dragged smaller than the layout can handle.
+let minTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(minTimer);
+  minTimer = setTimeout(() => {
+    const dw = Math.max(0, MIN.w - window.innerWidth), dh = Math.max(0, MIN.h - window.innerHeight);
+    if (dw || dh) try { window.resizeTo(window.outerWidth + dw, window.outerHeight + dh); } catch {}
+  }, 120);
+});
 
 // An open connection tells the server this window is alive; when the window
 // closes the connection drops and the CLI shuts down. (Reconnects are automatic.)
