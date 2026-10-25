@@ -89,6 +89,34 @@ helper that deletes it (and the folder, if empty) as soon as it has exited.
 | `installer/`            | Install, uninstall and doctor logic; embeds the S-Lab payload  |
 | `cmd/slab/`             | Placeholder S-Lab application that gets embedded               |
 
+## Build a program to share
+
+```
+.\build.ps1
+```
+
+This produces, in `dist\`:
+
+- `go-web-side.exe`: one self-contained program (about 9 MB). Nothing else needs
+  to be installed except Chrome or Edge, which Windows 11 includes.
+- `go-web-side-windows-amd64.zip`: the program and this README, the easiest way
+  to send it to someone.
+- `SHA256SUMS.txt`: checksums so a download can be verified.
+
+**For the person running it:** double-click `go-web-side.exe`. The S-Lab Setup
+window opens and has the focus; the console window it starts with is minimized
+to the taskbar, and it exits when you close the setup window. Run from a
+terminal instead, it leaves that terminal alone, and `go-web-side.exe cli`
+gives the terminal version.
+
+Windows may show a blue "Windows protected your PC" (SmartScreen) page the first
+time, because the program is not code-signed. Choose **More info**, then **Run
+anyway**. Signing it with a code-signing certificate removes that prompt.
+
+The icon, version details and manifest in the program come from `winres/` and
+are compiled into `rsrc_windows_amd64.syso` by `go generate` (`tools/winres`, a
+short standard-library-only program); regenerate after changing anything there.
+
 ## Look and feel
 
 The UI uses a teal accent with a soft tint for each status colour, light and dark

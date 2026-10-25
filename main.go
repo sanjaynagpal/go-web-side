@@ -1,5 +1,9 @@
 package main
 
+// Regenerate the Windows icon, version info and manifest (rsrc_windows_amd64.syso)
+// after changing anything in winres/. The linker embeds the .syso automatically.
+//go:generate go run ./tools/winres
+
 import (
 	"context"
 	"errors"
@@ -94,6 +98,7 @@ func run(port int, openBrowser, keepAlive bool) error {
 
 	fmt.Println("Serving on", url, "(Ctrl+C to stop)")
 	if openBrowser {
+		minimizeOwnConsole() // before the window opens, so the UI is what gets the focus
 		if err := open(url); err != nil {
 			fmt.Fprintln(os.Stderr, "could not open browser:", err)
 		}

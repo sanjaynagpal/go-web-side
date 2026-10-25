@@ -5,3 +5,5 @@
 # Never touch binaries.
 *.exe binary
 *.woff2 binary
+*.syso binary
+*.png binary
