@@ -10,6 +10,7 @@ func detect(Scope) *Info                       { return nil }
 func isElevated() bool                         { return false }
 func runElevated([]string) error               { return errElevationDeclined }
 func defaultDir(Scope) string                  { return "" }
+func scheduleSelfCleanup(string)               {}
 func doInstall(Scope, string, Progress) Result { return unsupported() }
 func doUninstall(Scope, Progress) Result       { return unsupported() }
 func doDoctor() Result                         { return unsupported() }

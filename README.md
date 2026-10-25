@@ -66,14 +66,17 @@ Direct commands exit with status 1 if the action did not succeed. Set
 - **Folder validation.** The Install tab checks the folder as you type (the same
   rules the installer uses) and disables Install until it is usable.
 - **Doctor** is read-only. It checks the registry record, version, install
-  folder, that `slab.exe` matches the copy embedded in the installer, and the
-  Settings > Apps entry, and warns if both a per-user and an all-users install
+  folder, that `slab.exe` matches the copy embedded in the installer, that the
+  uninstaller exists, and that the Settings > Apps entry and its uninstall
+  command point at files that still exist, and warns if both a per-user and an all-users install
   exist.
 
-An "Installed apps" entry is written so S-Lab shows up in Windows Settings. Its
-uninstall command points at the installer executable that performed the
-install, so that entry only works from a built binary at a stable path, not
-from `go run`.
+An "Installed apps" entry is written so S-Lab shows up in Windows Settings. The
+installer copies itself into the install folder as `uninstall.exe` and the
+entry's uninstall command runs that copy, so it keeps working wherever the
+installer was run from, including `go run`. A running program cannot delete its
+own file, so when the uninstaller removes itself it starts a short hidden
+helper that deletes it (and the folder, if empty) as soon as it has exited.
 
 ## Layout
 

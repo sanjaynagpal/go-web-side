@@ -203,7 +203,13 @@ func Install(scope Scope, dir string, progress Progress) Result {
 
 // Uninstall removes the S-Lab installation for scope, prompting for elevation if needed.
 func Uninstall(scope Scope, progress Progress) Result {
-	return withElevation(scope, "uninstall", nil, progress, doUninstall)
+	prev := detect(scope)
+	r := withElevation(scope, "uninstall", nil, progress, doUninstall)
+	if r.OK && prev != nil {
+		// If this program is the installed uninstaller, finish removing it once it exits.
+		scheduleSelfCleanup(prev.InstallPath)
+	}
+	return r
 }
 
 // Doctor runs read-only diagnostics over every installation found.

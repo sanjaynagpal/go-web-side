@@ -16,11 +16,14 @@ import (
 )
 
 const (
-	supported    = true
-	dirName      = "S-Lab"
-	appKey       = `Software\S-Lab`
-	uninstallKey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\S-Lab`
-	regAccess    = registry.WOW64_64KEY
+	supported = true
+	dirName   = "S-Lab"
+	// uninstallerName is the copy of this installer kept in the install folder
+	// so the Apps & features entry keeps working wherever it was run from.
+	uninstallerName = "uninstall.exe"
+	appKey          = `Software\S-Lab`
+	uninstallKey    = `Software\Microsoft\Windows\CurrentVersion\Uninstall\S-Lab`
+	regAccess       = registry.WOW64_64KEY
 )
 
 func root(s Scope) registry.Key {
@@ -93,6 +96,13 @@ func doInstall(s Scope, dir string, progress Progress) Result {
 	}
 	r.end("Copy "+exeName, "ok", fmt.Sprintf("%d bytes", len(payload)))
 
+	uninstallerPath := filepath.Join(dir, uninstallerName)
+	r.begin("Copy uninstaller")
+	if err := copySelf(uninstallerPath); err != nil {
+		return fail("Copy uninstaller", err)
+	}
+	r.end("Copy uninstaller", "ok", uninstallerPath)
+
 	r.begin("Write registry")
 	if err := writeAppKey(s, dir, time.Now().Format(time.RFC3339)); err != nil {
 		return fail("Write registry", err)
@@ -100,7 +110,7 @@ func doInstall(s Scope, dir string, progress Progress) Result {
 	r.end("Write registry", "ok", rootName(s)+`\`+appKey)
 
 	r.begin("Add to Apps & features")
-	if err := writeUninstallEntry(s, dir, exePath); err != nil {
+	if err := writeUninstallEntry(s, dir, exePath, uninstallerPath); err != nil {
 		return fail("Add to Apps & features", err)
 	}
 	r.end("Add to Apps & features", "ok", rootName(s)+`\`+uninstallKey)
@@ -138,23 +148,19 @@ func writeAppKey(s Scope, dir, date string) error {
 }
 
 // writeUninstallEntry adds the entry shown in Settings > Apps > Installed apps.
-func writeUninstallEntry(s Scope, dir, exePath string) error {
+func writeUninstallEntry(s Scope, dir, exePath, uninstallerPath string) error {
 	u, _, err := registry.CreateKey(root(s), uninstallKey, registry.SET_VALUE|regAccess)
 	if err != nil {
 		return err
 	}
 	defer u.Close()
-	self, err := os.Executable()
-	if err != nil {
-		return err
-	}
 	for name, val := range map[string]string{
 		"DisplayName":     "S-Lab",
 		"DisplayVersion":  Version,
 		"Publisher":       "S-Lab",
 		"InstallLocation": dir,
 		"DisplayIcon":     exePath,
-		"UninstallString": fmt.Sprintf(`"%s" worker uninstall -scope %s`, self, s),
+		"UninstallString": fmt.Sprintf(`"%s" worker uninstall -scope %s`, uninstallerPath, s),
 	} {
 		if err := u.SetStringValue(name, val); err != nil {
 			return err
@@ -186,8 +192,25 @@ func doUninstall(s Scope, progress Progress) Result {
 			return Result{Message: "Uninstall failed: " + err.Error() + " (is S-Lab running?)", Steps: r.steps}
 		}
 		r.end("Remove files", "ok", exe)
+
+		r.begin("Remove uninstaller")
+		pending, err := removeUninstaller(info.InstallPath)
+		if err != nil {
+			r.end("Remove uninstaller", "fail", err.Error())
+			return Result{Message: "Uninstall failed: " + err.Error(), Steps: r.steps}
+		}
+		if pending {
+			r.end("Remove uninstaller", "info", "in use by this uninstall; it is removed as soon as this program exits")
+		} else {
+			r.end("Remove uninstaller", "ok", filepath.Join(info.InstallPath, uninstallerName))
+		}
+
 		r.begin("Remove folder")
-		r.end("Remove folder", "info", removeFolderIfEmpty(info.InstallPath))
+		if pending {
+			r.end("Remove folder", "info", info.InstallPath+" is removed once the uninstaller has exited")
+		} else {
+			r.end("Remove folder", "info", removeFolderIfEmpty(info.InstallPath))
+		}
 	}
 
 	for _, k := range []struct{ name, key string }{
@@ -204,10 +227,16 @@ func doUninstall(s Scope, progress Progress) Result {
 	return Result{OK: true, Message: "S-Lab was uninstalled for " + scopeLabel(s) + ".", Steps: r.steps}
 }
 
-// removeInstalled deletes the S-Lab executable from dir and the folder if empty.
+// removeInstalled deletes the S-Lab executable and uninstaller from dir, and
+// the folder if that leaves it empty.
 func removeInstalled(dir string) string {
 	if err := os.Remove(filepath.Join(dir, exeName)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Sprintf("could not remove %s from %s: %v", exeName, dir, err)
+	}
+	if pending, err := removeUninstaller(dir); err != nil {
+		return fmt.Sprintf("could not remove %s from %s: %v", uninstallerName, dir, err)
+	} else if pending {
+		return dir + " left in place (it holds the program that is running)"
 	}
 	return removeFolderIfEmpty(dir)
 }
@@ -308,6 +337,12 @@ func checkInstall(s Scope, info *Info) []Step {
 		add("Executable", "ok", exeName+" is present")
 	}
 
+	if _, err := os.Stat(filepath.Join(info.InstallPath, uninstallerName)); err != nil {
+		add("Uninstaller", "warn", uninstallerName+" is missing; reinstall to restore it")
+	} else {
+		add("Uninstaller", "ok", uninstallerName+" is present")
+	}
+
 	u, err := registry.OpenKey(root(s), uninstallKey, registry.QUERY_VALUE|regAccess)
 	if err != nil {
 		add("Apps & features entry", "fail", "uninstall entry is missing")
@@ -319,6 +354,13 @@ func checkInstall(s Scope, info *Info) []Step {
 	} else {
 		add("Apps & features entry", "ok", "present and consistent")
 	}
+	if target := uninstallTarget(regString(u, "UninstallString")); target == "" {
+		add("Uninstall command", "warn", "the Apps & features entry has no uninstall command")
+	} else if _, err := os.Stat(target); err != nil {
+		add("Uninstall command", "warn", target+" no longer exists, so uninstalling from Settings will fail; reinstall to fix it")
+	} else {
+		add("Uninstall command", "ok", "runs "+target)
+	}
 	return steps
 }
 
@@ -328,6 +370,11 @@ func groupName(s Scope) string {
 		return "All users"
 	}
 	return "Current user"
+}
+
+func regString(k registry.Key, name string) string {
+	v, _, _ := k.GetStringValue(name)
+	return v
 }
 
 func scopeLabel(s Scope) string {
