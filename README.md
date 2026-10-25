@@ -48,8 +48,10 @@ Direct commands exit with status 1 if the action did not succeed. Set
   for all users (`%ProgramFiles%\S-Lab`, `HKLM`). Installing for all users
   needs elevation: the server stays unelevated and relaunches the CLI as a
   hidden `worker` through a UAC prompt. If you decline, nothing changes.
-  The install folder can be changed (the "Install folder" field in the UI, or
-  `cli install -path`). It must be a full local path, not a drive root or a
+  The install folder can be changed (the "Install folder" field in the UI, with
+  a **Browse…** button that opens the Windows folder dialog, or `cli install
+  -path`). If the folder you pick already has other files in it, S-Lab goes in
+  an `S-Lab` subfolder. The folder must be a full local path, not a drive root or a
   network share; this is checked before any UAC prompt. Installing again into a
   different folder moves the app and removes the old copy.
 - **Uninstall** reads the registry record (which includes the chosen folder) and

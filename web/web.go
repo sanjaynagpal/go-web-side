@@ -40,12 +40,37 @@ func Handler(host string, onIdle func()) (http.Handler, error) {
 	mux.HandleFunc("GET /api/doctor", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, installer.Doctor())
 	})
+	var picking sync.Mutex // one folder dialog at a time
+	mux.HandleFunc("POST /api/browse", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Path string `json:"path"`
+		}
+		json.NewDecoder(r.Body).Decode(&req) // an empty or bad body just means no starting folder
+		if !picking.TryLock() {
+			writeJSON(w, http.StatusConflict, browseResult{Error: "A folder dialog is already open."})
+			return
+		}
+		defer picking.Unlock()
+		dir, ok, err := installer.PickFolder(req.Path)
+		if err != nil {
+			writeJSON(w, http.StatusOK, browseResult{Error: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, browseResult{Path: dir, Cancelled: !ok})
+	})
 	mux.HandleFunc("POST /api/install", scoped(&busy, installer.Install))
 	mux.HandleFunc("POST /api/uninstall", scoped(&busy, func(s installer.Scope, _ string) installer.Result {
 		return installer.Uninstall(s)
 	}))
 
 	return guard(host, mux), nil
+}
+
+// browseResult is the reply to /api/browse.
+type browseResult struct {
+	Path      string `json:"path,omitempty"`
+	Cancelled bool   `json:"cancelled,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 // idleGrace is how long the page may be disconnected (for example while

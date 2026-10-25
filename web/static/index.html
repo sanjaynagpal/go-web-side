@@ -91,6 +91,9 @@
       background: var(--bg); color: var(--text); font: 13px ui-monospace, "Cascadia Mono", Consolas, monospace;
       transition: border-color .2s; }
     .path-row input:focus { outline: none; border-color: var(--accent); }
+    button.secondary { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px;
+      font: inherit; cursor: pointer; white-space: nowrap; transition: border-color .2s; }
+    button.secondary:hover:not(:disabled) { border-color: var(--accent); }
     button.link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
     button.link:hover { text-decoration: underline; }
     button.link[hidden] { display: none; }
@@ -150,6 +153,7 @@
     <label class="field" for="idir">Install folder</label>
     <div class="path-row">
       <input id="idir" type="text" spellcheck="false" autocomplete="off" placeholder="Folder to install into">
+      <button type="button" class="secondary" id="idir-browse">Browse…</button>
       <button type="button" class="link" id="idir-reset" hidden>Use default</button>
     </div>
     <button class="primary" id="do-install">Install</button>
@@ -186,7 +190,7 @@ function syncDir() {
 function applyEnabled() {
   const ok = online && !busy;
   const why = online ? "" : "Not connected to the installer";
-  [["do-install", canInstall], ["do-uninstall", canUninstall], ["do-doctor", true]].forEach(([id, allowed]) => {
+  [["do-install", canInstall], ["do-uninstall", canUninstall], ["do-doctor", true], ["idir-browse", canInstall]].forEach(([id, allowed]) => {
     $(id).disabled = !(ok && allowed);
     $(id).title = why;
   });
@@ -271,6 +275,31 @@ document.querySelectorAll("input[name=iscope]").forEach((r) => r.onchange = sync
 $("idir").oninput = () => {
   dirEdited = $("idir").value !== defaultDirs[chosen("iscope")];
   syncDir();
+};
+$("idir-browse").onclick = async (e) => {
+  if (busy) return;
+  const button = e.target;
+  busy = true; // no other action while the dialog is open
+  button.textContent = "Choose a folder…";
+  button.classList.add("busy");
+  $("idir").disabled = true;
+  applyEnabled();
+  try {
+    const r = await api("/api/browse", { path: $("idir").value.trim() });
+    if (r.error) show({ ok: false, message: r.error });
+    else if (r.path) {
+      $("idir").value = r.path;
+      dirEdited = r.path !== defaultDirs[chosen("iscope")];
+    }
+  } catch (err) {
+    show({ ok: false, message: "Could not open the folder dialog: " + err.message });
+  }
+  busy = false;
+  button.textContent = "Browse…";
+  button.classList.remove("busy");
+  $("idir").disabled = false;
+  syncDir();
+  applyEnabled();
 };
 $("idir-reset").onclick = () => { dirEdited = false; syncDir(); $("idir").focus(); };
 
