@@ -22,6 +22,7 @@ const cliUsage = `usage:
 // an interactive menu; with an action it runs that action and exits non-zero
 // if it did not succeed.
 func cli(args []string) error {
+	installer.StepDelay = 0 // the pacing that makes GUI progress visible would only slow the terminal
 	if len(args) == 0 {
 		return menu(bufio.NewReader(os.Stdin))
 	}
@@ -46,7 +47,7 @@ func cli(args []string) error {
 		if scope == "" {
 			scope = installer.ScopeUser
 		}
-		r = installer.Install(scope, *pathFlag)
+		r = installer.Install(scope, *pathFlag, nil)
 	case "uninstall":
 		if scope == "" {
 			st := installer.GetStatus()
@@ -59,7 +60,7 @@ func cli(args []string) error {
 				scope = installer.ScopeUser
 			}
 		}
-		r = installer.Uninstall(scope)
+		r = installer.Uninstall(scope, nil)
 	case "doctor":
 		r = installer.Doctor()
 	default:
@@ -135,7 +136,7 @@ func menuInstall(in *bufio.Reader) error {
 	if scope == installer.ScopeMachine {
 		fmt.Println("Waiting for administrator permission...")
 	}
-	printResult(installer.Install(scope, dir))
+	printResult(installer.Install(scope, dir, nil))
 	return nil
 }
 
@@ -176,7 +177,7 @@ func menuUninstall(in *bufio.Reader, st installer.Status) error {
 		return err
 	}
 	if strings.EqualFold(ok, "y") || strings.EqualFold(ok, "yes") {
-		printResult(installer.Uninstall(target.Scope))
+		printResult(installer.Uninstall(target.Scope, nil))
 	}
 	return nil
 }
@@ -213,7 +214,11 @@ func printResult(r installer.Result) {
 		default:
 			tag = dim(tag)
 		}
-		line := tag + "  " + s.Name
+		name := s.Name
+		if s.Group != "" && s.Group != "General" {
+			name = "[" + s.Group + "] " + name
+		}
+		line := tag + "  " + name
 		if s.Detail != "" {
 			line += dim(" - " + s.Detail)
 		}

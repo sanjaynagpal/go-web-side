@@ -58,9 +58,22 @@ func Handler(host string, onIdle func()) (http.Handler, error) {
 		}
 		writeJSON(w, http.StatusOK, browseResult{Path: dir, Cancelled: !ok})
 	})
-	mux.HandleFunc("POST /api/install", scoped(&busy, installer.Install))
-	mux.HandleFunc("POST /api/uninstall", scoped(&busy, func(s installer.Scope, _ string) installer.Result {
-		return installer.Uninstall(s)
+	mux.HandleFunc("POST /api/validate", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Scope string `json:"scope"`
+			Path  string `json:"path"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		scope, err := installer.ParseScope(req.Scope)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, installer.Validation{Message: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, installer.ValidateDir(scope, req.Path))
+	})
+	mux.HandleFunc("POST /api/install", streamed(&busy, installer.Install))
+	mux.HandleFunc("POST /api/uninstall", streamed(&busy, func(s installer.Scope, _ string, p installer.Progress) installer.Result {
+		return installer.Uninstall(s, p)
 	}))
 
 	return guard(host, mux), nil
@@ -137,9 +150,18 @@ func (t *tracker) disconnect() {
 	}
 }
 
-// scoped adapts an installer action that takes {"scope": "...", "path": "..."}
-// (path optional) to a handler.
-func scoped(busy *sync.Mutex, action func(installer.Scope, string) installer.Result) http.HandlerFunc {
+// event is one line of a streamed response: a step as it happens, then the result.
+type event struct {
+	Type   string            `json:"type"` // "step" or "result"
+	Step   *installer.Step   `json:"step,omitempty"`
+	Result *installer.Result `json:"result,omitempty"`
+}
+
+// streamed adapts an installer action that takes {"scope": "...", "path": "..."}
+// (path optional) to a handler. Once the request is accepted the reply is
+// newline-delimited JSON events, flushed as each step happens, so the page can
+// show live progress; rejected requests get a single plain JSON result.
+func streamed(busy *sync.Mutex, action func(installer.Scope, string, installer.Progress) installer.Result) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Scope string `json:"scope"`
@@ -154,12 +176,26 @@ func scoped(busy *sync.Mutex, action func(installer.Scope, string) installer.Res
 			writeJSON(w, http.StatusBadRequest, installer.Result{Message: err.Error()})
 			return
 		}
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			writeJSON(w, http.StatusInternalServerError, installer.Result{Message: "Streaming is not supported."})
+			return
+		}
 		if !busy.TryLock() {
 			writeJSON(w, http.StatusConflict, installer.Result{Message: "Another operation is already running."})
 			return
 		}
 		defer busy.Unlock()
-		writeJSON(w, http.StatusOK, action(scope, req.Path))
+
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Header().Set("Cache-Control", "no-store")
+		enc := json.NewEncoder(w)
+		send := func(ev event) {
+			enc.Encode(ev)
+			flusher.Flush()
+		}
+		result := action(scope, req.Path, func(s installer.Step) { send(event{Type: "step", Step: &s}) })
+		send(event{Type: "result", Result: &result})
 	}
 }
 

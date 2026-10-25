@@ -18,7 +18,6 @@ import (
 const (
 	supported    = true
 	dirName      = "S-Lab"
-	exeName      = "slab.exe"
 	appKey       = `Software\S-Lab`
 	uninstallKey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\S-Lab`
 	regAccess    = registry.WOW64_64KEY
@@ -61,53 +60,65 @@ func detect(s Scope) *Info {
 	}
 }
 
-func doInstall(s Scope, dir string) Result {
-	var steps []Step
-	add := func(name, status, detail string) { steps = append(steps, Step{name, status, detail}) }
+func doInstall(s Scope, dir string, progress Progress) Result {
+	r := &reporter{progress: progress}
 	fail := func(name string, err error) Result {
-		add(name, "fail", err.Error())
-		return Result{Message: "Installation failed: " + err.Error(), Steps: steps}
+		r.end(name, "fail", err.Error())
+		return Result{Message: "Installation failed: " + err.Error(), Steps: r.steps}
 	}
 
 	dir, err := ResolveDir(s, dir)
 	if err != nil {
 		return Result{Message: capitalize(err.Error())}
 	}
-	prev := detect(s)
-	if prev != nil {
-		add("Existing installation", "info", fmt.Sprintf("version %s will be replaced", prev.Version))
-	}
 
+	r.begin("Check install folder")
+	prev := detect(s)
+	detail := dir
+	if prev != nil {
+		detail += fmt.Sprintf(" (replaces version %s)", prev.Version)
+	}
+	r.end("Check install folder", "ok", detail)
+
+	r.begin("Create install directory")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fail("Create install directory", err)
 	}
-	add("Create install directory", "ok", dir)
+	r.end("Create install directory", "ok", dir)
 
 	exePath := filepath.Join(dir, exeName)
+	r.begin("Copy " + exeName)
 	if err := writeFileAtomic(exePath, payload); err != nil {
 		return fail("Copy "+exeName, err)
 	}
-	add("Copy "+exeName, "ok", fmt.Sprintf("%d bytes", len(payload)))
+	r.end("Copy "+exeName, "ok", fmt.Sprintf("%d bytes", len(payload)))
 
-	date := time.Now().Format(time.RFC3339)
-	if err := writeRegistry(s, dir, exePath, date); err != nil {
+	r.begin("Write registry")
+	if err := writeAppKey(s, dir, time.Now().Format(time.RFC3339)); err != nil {
 		return fail("Write registry", err)
 	}
-	add("Write registry", "ok", rootName(s)+`\`+appKey)
+	r.end("Write registry", "ok", rootName(s)+`\`+appKey)
+
+	r.begin("Add to Apps & features")
+	if err := writeUninstallEntry(s, dir, exePath); err != nil {
+		return fail("Add to Apps & features", err)
+	}
+	r.end("Add to Apps & features", "ok", rootName(s)+`\`+uninstallKey)
 
 	// Reinstalling into a different folder moves the app: drop the old copy.
 	if prev != nil && prev.InstallPath != "" && !strings.EqualFold(filepath.Clean(prev.InstallPath), dir) {
-		add("Remove previous copy", "info", removeInstalled(prev.InstallPath))
+		r.begin("Remove previous copy")
+		r.end("Remove previous copy", "info", removeInstalled(prev.InstallPath))
 	}
 
 	return Result{
 		OK:      true,
 		Message: fmt.Sprintf("S-Lab %s installed for %s.", Version, scopeLabel(s)),
-		Steps:   steps,
+		Steps:   r.steps,
 	}
 }
 
-func writeRegistry(s Scope, dir, exePath, date string) error {
+func writeAppKey(s Scope, dir, date string) error {
 	k, _, err := registry.CreateKey(root(s), appKey, registry.SET_VALUE|regAccess)
 	if err != nil {
 		return err
@@ -123,8 +134,11 @@ func writeRegistry(s Scope, dir, exePath, date string) error {
 			return err
 		}
 	}
+	return nil
+}
 
-	// Entry shown in Settings > Apps > Installed apps.
+// writeUninstallEntry adds the entry shown in Settings > Apps > Installed apps.
+func writeUninstallEntry(s Scope, dir, exePath string) error {
 	u, _, err := registry.CreateKey(root(s), uninstallKey, registry.SET_VALUE|regAccess)
 	if err != nil {
 		return err
@@ -154,35 +168,40 @@ func writeRegistry(s Scope, dir, exePath, date string) error {
 	return u.SetDWordValue("EstimatedSize", uint32(len(payload)/1024+1))
 }
 
-func doUninstall(s Scope) Result {
-	var steps []Step
-	add := func(name, status, detail string) { steps = append(steps, Step{name, status, detail}) }
+func doUninstall(s Scope, progress Progress) Result {
+	r := &reporter{progress: progress}
 
 	info := detect(s)
 	if info == nil {
-		return Result{Message: "S-Lab is not installed for " + scopeLabel(s) + ".", Steps: steps}
+		return Result{Message: "S-Lab is not installed for " + scopeLabel(s) + "."}
 	}
 
 	// The folder may be one the user chose, so remove only the file we
 	// installed, and the folder itself only if that leaves it empty.
 	if info.InstallPath != "" {
 		exe := filepath.Join(info.InstallPath, exeName)
+		r.begin("Remove files")
 		if err := os.Remove(exe); err != nil && !errors.Is(err, os.ErrNotExist) {
-			add("Remove files", "fail", err.Error())
-			return Result{Message: "Uninstall failed: " + err.Error() + " (is S-Lab running?)", Steps: steps}
+			r.end("Remove files", "fail", err.Error())
+			return Result{Message: "Uninstall failed: " + err.Error() + " (is S-Lab running?)", Steps: r.steps}
 		}
-		add("Remove files", "ok", exe)
-		add("Remove folder", "info", removeFolderIfEmpty(info.InstallPath))
+		r.end("Remove files", "ok", exe)
+		r.begin("Remove folder")
+		r.end("Remove folder", "info", removeFolderIfEmpty(info.InstallPath))
 	}
 
-	for _, key := range []string{uninstallKey, appKey} {
-		if err := registry.DeleteKey(root(s), key); err != nil && !errors.Is(err, registry.ErrNotExist) {
-			add("Remove registry key", "fail", err.Error())
-			return Result{Message: "Uninstall failed: " + err.Error(), Steps: steps}
+	for _, k := range []struct{ name, key string }{
+		{"Remove Apps & features entry", uninstallKey},
+		{"Remove registry record", appKey},
+	} {
+		r.begin(k.name)
+		if err := registry.DeleteKey(root(s), k.key); err != nil && !errors.Is(err, registry.ErrNotExist) {
+			r.end(k.name, "fail", err.Error())
+			return Result{Message: "Uninstall failed: " + err.Error(), Steps: r.steps}
 		}
-		add("Remove registry key", "ok", rootName(s)+`\`+key)
+		r.end(k.name, "ok", rootName(s)+`\`+k.key)
 	}
-	return Result{OK: true, Message: "S-Lab was uninstalled for " + scopeLabel(s) + ".", Steps: steps}
+	return Result{OK: true, Message: "S-Lab was uninstalled for " + scopeLabel(s) + ".", Steps: r.steps}
 }
 
 // removeInstalled deletes the S-Lab executable from dir and the folder if empty.
@@ -206,27 +225,29 @@ func removeFolderIfEmpty(dir string) string {
 
 func doDoctor() Result {
 	var steps []Step
-	add := func(name, status, detail string) { steps = append(steps, Step{name, status, detail}) }
+	add := func(group, name, status, detail string) {
+		steps = append(steps, Step{Name: name, Status: status, Detail: detail, Group: group})
+	}
 
-	add("Installer payload", "ok", fmt.Sprintf("S-Lab %s, %d bytes embedded", Version, len(payload)))
+	add("General", "Installer payload", "ok", fmt.Sprintf("S-Lab %s, %d bytes embedded", Version, len(payload)))
 	if isElevated() {
-		add("Privileges", "info", "running as administrator")
+		add("General", "Privileges", "info", "running as administrator")
 	} else {
-		add("Privileges", "info", "standard user (all-users changes will ask for permission)")
+		add("General", "Privileges", "info", "standard user (all-users changes will ask for permission)")
 	}
 
 	found := 0
 	for _, s := range []Scope{ScopeUser, ScopeMachine} {
 		info := detect(s)
 		if info == nil {
-			add(scopeLabel(s), "info", "not installed")
+			add(groupName(s), "Installation", "info", "not installed")
 			continue
 		}
 		found++
 		steps = append(steps, checkInstall(s, info)...)
 	}
 	if found == 2 {
-		add("Multiple installs", "warn", "installed for both the current user and all users; the per-user copy may shadow the shared one")
+		add("General", "Multiple installs", "warn", "installed for both the current user and all users; the per-user copy may shadow the shared one")
 	}
 
 	ok, warns := true, 0
@@ -252,8 +273,9 @@ func doDoctor() Result {
 
 func checkInstall(s Scope, info *Info) []Step {
 	var steps []Step
-	p := "[" + scopeLabel(s) + "] "
-	add := func(name, status, detail string) { steps = append(steps, Step{p + name, status, detail}) }
+	add := func(name, status, detail string) {
+		steps = append(steps, Step{Name: name, Status: status, Detail: detail, Group: groupName(s)})
+	}
 
 	if info.InstallPath == "" || info.Version == "" {
 		add("Registry record", "fail", "InstallPath or Version is missing")
@@ -298,6 +320,14 @@ func checkInstall(s Scope, info *Info) []Step {
 		add("Apps & features entry", "ok", "present and consistent")
 	}
 	return steps
+}
+
+// groupName is the heading Doctor lists an installation's checks under.
+func groupName(s Scope) string {
+	if s == ScopeMachine {
+		return "All users"
+	}
+	return "Current user"
 }
 
 func scopeLabel(s Scope) string {

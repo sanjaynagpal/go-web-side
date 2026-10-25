@@ -51,3 +51,39 @@ func TestResolveDir(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveDirRejectsForbiddenCharacters(t *testing.T) {
+	for _, in := range []string{`C:\a?b`, `C:\a*b`, `C:\a<b`, `C:\a|b`, `C:\a:b`} {
+		if _, err := ResolveDir(ScopeUser, in); err == nil || !strings.Contains(err.Error(), "character") {
+			t.Errorf("ResolveDir(%q) error = %v, want a forbidden-character error", in, err)
+		}
+	}
+	if _, err := ResolveDir(ScopeUser, `C:\Program Files (x86)\My-App_1.0`); err != nil {
+		t.Errorf("a normal path was rejected: %v", err)
+	}
+}
+
+func TestValidateDir(t *testing.T) {
+	base := t.TempDir()
+	busy := filepath.Join(base, "busy")
+	os.Mkdir(busy, 0o755)
+	os.WriteFile(filepath.Join(busy, "x.txt"), nil, 0o600)
+
+	if v := ValidateDir(ScopeUser, filepath.Join(base, "new")); !v.OK || !strings.Contains(v.Note, "will be created") {
+		t.Errorf("new folder: %+v", v)
+	}
+	if v := ValidateDir(ScopeUser, busy); !v.OK || !strings.Contains(v.Note, "already has files") {
+		t.Errorf("folder with files: %+v", v)
+	}
+	empty := filepath.Join(base, "empty")
+	os.Mkdir(empty, 0o755)
+	if v := ValidateDir(ScopeUser, empty); !v.OK || v.Note != "" {
+		t.Errorf("empty existing folder: %+v", v)
+	}
+	if v := ValidateDir(ScopeUser, `relative`); v.OK || v.Message == "" {
+		t.Errorf("relative path: %+v", v)
+	}
+	if v := ValidateDir(ScopeUser, ""); !v.OK || v.Resolved != defaultDir(ScopeUser) {
+		t.Errorf("empty means default: %+v", v)
+	}
+}

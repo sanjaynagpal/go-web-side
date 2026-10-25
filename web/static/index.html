@@ -39,6 +39,15 @@
     h1 { margin: 0 0 2px; font-size: 22px; }
     .sub { margin: 0 0 20px; color: var(--muted); }
     header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .hidden, [hidden] { display: none !important; }
+
+    /* ---- icons (an SVG sprite is defined at the top of <body>) ---- */
+    .ico { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2;
+      stroke-linecap: round; stroke-linejoin: round; }
+    .ico.ok { color: var(--ok); } .ico.warn { color: var(--warn); } .ico.fail { color: var(--fail); }
+    .ico.info { color: var(--info); } .ico.run { color: var(--accent); animation: spin .8s linear infinite; }
+
+    /* ---- connection pill and theme button ---- */
     .conn { display: inline-flex; align-items: center; gap: 7px; margin-top: 4px; padding: 3px 11px 3px 9px;
       border: 1px solid var(--line); border-radius: 999px; background: var(--card); font-size: 13px; white-space: nowrap; }
     .conn .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--info); }
@@ -49,54 +58,64 @@
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
     @keyframes blink { to { opacity: .25; } }
     .head-right { display: flex; align-items: center; gap: 8px; }
-    .icon { position: relative; width: 32px; height: 32px; margin-top: 4px; padding: 0; border: 1px solid var(--line);
+    .icon-btn { position: relative; width: 32px; height: 32px; margin-top: 4px; padding: 0; border: 1px solid var(--line);
       border-radius: 50%; background: var(--card); color: var(--text); cursor: pointer; transition: border-color .2s; }
-    .icon:hover { border-color: var(--accent); }
-    .icon svg { position: absolute; inset: 7px; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2;
+    .icon-btn:hover { border-color: var(--accent); }
+    .icon-btn svg { position: absolute; inset: 7px; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2;
       stroke-linecap: round; stroke-linejoin: round; transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .3s; }
     /* Show the icon for the theme a click switches to: sun in dark mode, moon in light. */
-    .icon .sun  { opacity: 0; transform: rotate(-90deg) scale(.4); }
-    .icon .moon { opacity: 1; transform: none; }
-    .icon[data-mode="dark"] .sun  { opacity: 1; transform: none; }
-    .icon[data-mode="dark"] .moon { opacity: 0; transform: rotate(90deg) scale(.4); }
+    .icon-btn .sun  { opacity: 0; transform: rotate(-90deg) scale(.4); }
+    .icon-btn .moon { opacity: 1; transform: none; }
+    .icon-btn[data-mode="dark"] .sun  { opacity: 1; transform: none; }
+    .icon-btn[data-mode="dark"] .moon { opacity: 0; transform: rotate(90deg) scale(.4); }
 
+    /* ---- motion: opacity and rotation only, so bordered boxes never shift ---- */
     @keyframes rise { from { opacity: 0; } }
     @keyframes pop  { from { opacity: 0; } }
     @keyframes fade { from { opacity: 0; } }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
-    .working .track { height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--accent) 18%, transparent); }
-    .working .bar { width: 30%; height: 100%; border-radius: 3px; background: var(--accent); animation: slide 1.3s ease-in-out infinite; }
-    .working p { margin: 10px 0 0; color: var(--muted); }
-    .working .elapsed { font-variant-numeric: tabular-nums; }
     section.card { animation: rise .28s ease-out; }
     .banner { animation: pop .3s ease-out; }
-    ul.steps li { animation: fade .3s ease-out both; animation-delay: min(calc(var(--i, 0) * 45ms), 700ms); }
+    ul.steps.animate li, ul.steps.live li { animation: fade .3s ease-out both; }
+    ul.steps.animate li { animation-delay: min(calc(var(--i, 0) * 45ms), 700ms); }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
     }
+
+    /* ---- cards, tabs, forms ---- */
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; border: 1px solid var(--line);
+      border-radius: 999px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .chip .ico { width: 14px; height: 14px; }
     .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
-    .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 14px; color: var(--muted); font: inherit; cursor: pointer; transition: color .2s, border-color .2s; }
+    .tabs button { display: inline-flex; align-items: center; gap: 7px; background: none; border: 0; border-bottom: 2px solid transparent;
+      padding: 8px 14px; color: var(--muted); font: inherit; cursor: pointer; transition: color .2s, border-color .2s; }
     .tabs button:hover { color: var(--text); }
     .tabs button[aria-selected="true"] { color: var(--text); border-color: var(--accent); font-weight: 600; }
     label.opt { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: border-color .2s, background-color .2s; }
     label.opt:hover { border-color: var(--muted); }
     label.opt:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
     label.opt small { display: block; color: var(--muted); margin-left: 24px; }
-    .shield { color: var(--warn); }
+    .shield { display: inline-flex; align-items: center; gap: 4px; color: var(--warn); font-size: 13px; vertical-align: middle; }
+    .shield .ico { width: 15px; height: 15px; }
     .field { display: block; margin: 14px 0 6px; font-weight: 600; }
-    .path-row { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .path-row { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
     .path-row input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
       background: var(--bg); color: var(--text); font: 13px ui-monospace, "Cascadia Mono", Consolas, monospace;
       transition: border-color .2s; }
     .path-row input:focus { outline: none; border-color: var(--accent); }
+    .path-row input[aria-invalid="true"] { border-color: var(--fail); }
+    .field-msg { display: flex; align-items: flex-start; gap: 6px; min-height: 1.35em; margin: 0 0 12px; font-size: 13px; }
+    .field-msg .ico { width: 15px; height: 15px; margin-top: 2px; }
+    .field-msg.note { color: var(--muted); } .field-msg.error { color: var(--fail); }
     button.secondary { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px;
       font: inherit; cursor: pointer; white-space: nowrap; transition: border-color .2s; }
     button.secondary:hover:not(:disabled) { border-color: var(--accent); }
     button.link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
     button.link:hover { text-decoration: underline; }
-    button.link[hidden] { display: none; }
     button.primary { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 8px; padding: 9px 18px; font: inherit; font-weight: 600; cursor: pointer; transition: filter .2s, opacity .2s; }
     button.primary:hover:not(:disabled) { filter: brightness(1.1); }
     button.primary:active:not(:disabled) { filter: brightness(.92); }
@@ -104,22 +123,67 @@
     button.primary.busy:disabled { opacity: .85; cursor: progress; }
     button.primary.busy::before { content: ""; display: inline-block; width: 1em; height: 1em; margin-right: 8px; vertical-align: -2px;
       border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
-    .status { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
-    .status dt { color: var(--muted); }
-    .status dd { margin: 0; overflow-wrap: anywhere; }
+    p.note { color: var(--muted); margin: 0 0 12px; }
+
+    /* ---- status tiles ---- */
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 520px) { .tiles { grid-template-columns: 1fr; } }
+    .tile { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+    .tile-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .tile-title { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px 1px 6px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .badge .ico { width: 14px; height: 14px; }
+    .badge.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+    .badge.none { color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent); padding-left: 9px; }
+    .tile-path { display: flex; align-items: center; gap: 4px; min-width: 0; color: var(--muted); font-size: 12px; }
+    .tile-path code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px ui-monospace, "Cascadia Mono", Consolas, monospace; }
+    .copy { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px;
+      background: none; color: var(--muted); cursor: pointer; transition: color .2s, background-color .2s; }
+    .copy:hover { color: var(--text); background: color-mix(in srgb, var(--muted) 16%, transparent); }
+    .copy.copied { color: var(--ok); }
+    .copy .ico { width: 15px; height: 15px; }
+
+    /* ---- results, live progress and Doctor groups ---- */
     .banner { border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line); font-weight: 600; }
     .banner.ok { color: var(--ok); } .banner.bad { color: var(--fail); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+    .chips .chip { color: var(--text); font-size: 13px; }
     ul.steps { list-style: none; margin: 0; padding: 0; }
-    ul.steps li { display: grid; grid-template-columns: 52px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    ul.steps li { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
     ul.steps li:last-child { border: 0; }
-    .tag { font-size: 12px; font-weight: 700; text-transform: uppercase; }
-    .tag.ok { color: var(--ok); } .tag.warn { color: var(--warn); } .tag.fail { color: var(--fail); } .tag.info { color: var(--info); }
+    ul.steps .ico { margin-top: 2px; }
+    .step-text { display: flex; flex-direction: column; min-width: 0; }
+    .step-name { overflow-wrap: anywhere; }
     .detail { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
-    .hidden { display: none; }
-    p.note { color: var(--muted); margin: 0 0 12px; }
+    .group { border: 1px solid var(--line); border-radius: 8px; padding: 2px 12px; margin-top: 10px; }
+    .group-title { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 0 4px; font-size: 14px; }
+    .group-title .count { margin-left: auto; font-weight: 400; font-size: 12px; color: var(--muted); }
+    .working-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+    .working .elapsed { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .working .track { height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--accent) 18%, transparent); }
+    .working .bar { width: 30%; height: 100%; border-radius: 3px; background: var(--accent); animation: slide 1.3s ease-in-out infinite; }
+    .working .hint { margin: 10px 0 0; color: var(--muted); }
+    .working ul.steps { margin-top: 8px; }
   </style>
 </head>
 <body>
+<!-- Icon sprite: <use href="#i-name"> -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17.2v.1"/></symbol>
+    <symbol id="i-fail" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.1"/></symbol>
+    <symbol id="i-run" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/></symbol>
+    <symbol id="i-install" viewBox="0 0 24 24"><path d="M12 4v10M8 10.5l4 4 4-4"/><path d="M5 19h14"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-5.5 8-5.5s6.5 1.5 8 5.5"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  </defs>
+</svg>
 <main>
   <header>
     <div>
@@ -130,32 +194,38 @@
       <div id="conn" class="conn connecting" role="status" aria-live="polite" title="Connection to the installer">
         <span class="dot"></span><span id="conn-text">Connecting…</span>
       </div>
-      <button id="theme" class="icon" type="button" title="Switch theme" aria-label="Switch theme">
+      <button id="theme" class="icon-btn" type="button" title="Switch theme" aria-label="Switch theme">
         <svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
         <svg class="moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       </button>
     </div>
   </header>
 
-  <div class="card"><dl class="status" id="status"></dl></div>
+  <div class="card" id="status-card">
+    <div class="card-head"><span class="eyebrow">Installation status</span><span id="privileges"></span></div>
+    <div class="tiles" id="tiles"></div>
+    <p class="note" id="platform-note" hidden style="margin:12px 0 0"></p>
+  </div>
 
   <div class="tabs" role="tablist">
-    <button role="tab" data-tab="install" aria-selected="true">Install</button>
-    <button role="tab" data-tab="uninstall" aria-selected="false">Uninstall</button>
-    <button role="tab" data-tab="doctor" aria-selected="false">Doctor</button>
+    <button role="tab" data-tab="install" aria-selected="true"><svg class="ico"><use href="#i-install"/></svg>Install</button>
+    <button role="tab" data-tab="uninstall" aria-selected="false"><svg class="ico"><use href="#i-trash"/></svg>Uninstall</button>
+    <button role="tab" data-tab="doctor" aria-selected="false"><svg class="ico"><use href="#i-pulse"/></svg>Doctor</button>
   </div>
 
   <section id="install" class="card">
     <label class="opt"><input type="radio" name="iscope" value="user" checked> Just for me
       <small>Installs to your profile. No administrator permission needed.</small></label>
-    <label class="opt"><input type="radio" name="iscope" value="machine"> For all users on this computer <span class="shield">&#9211; administrator</span>
+    <label class="opt"><input type="radio" name="iscope" value="machine"> For all users on this computer
+      <span class="shield"><svg class="ico"><use href="#i-shield"/></svg>administrator</span>
       <small>Installs to Program Files. Windows will ask for permission.</small></label>
     <label class="field" for="idir">Install folder</label>
     <div class="path-row">
-      <input id="idir" type="text" spellcheck="false" autocomplete="off" placeholder="Folder to install into">
+      <input id="idir" type="text" spellcheck="false" autocomplete="off" placeholder="Folder to install into" aria-describedby="idir-msg">
       <button type="button" class="secondary" id="idir-browse">Browse…</button>
       <button type="button" class="link" id="idir-reset" hidden>Use default</button>
     </div>
+    <p class="field-msg" id="idir-msg" role="status" aria-live="polite"></p>
     <button class="primary" id="do-install">Install</button>
   </section>
 
@@ -175,24 +245,25 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const label = { user: "Current user", machine: "All users" };
+const scopeIcon = { user: "user", machine: "monitor" };
+const statusLabel = { ok: "Passed", warn: "Warning", fail: "Failed", info: "Info", run: "In progress" };
 let busy = false;
-let online = false, canInstall = false, canUninstall = false;
+let online = false, canInstall = false, canUninstall = false, dirValid = true;
 let defaultDirs = { user: "", machine: "" };
 let dirEdited = false; // once the user types, stop overwriting the folder when the scope changes
 
-function syncDir() {
-  const def = defaultDirs[document.querySelector("input[name=iscope]:checked")?.value] ?? "";
-  if (!dirEdited) $("idir").value = def;
-  $("idir-reset").hidden = $("idir").value === def;
-}
+const icon = (name, cls = name, text) =>
+  `<svg class="ico ${cls}" ${text ? `role="img" aria-label="${text}"` : 'aria-hidden="true"'}><use href="#i-${name}"/></svg>`;
+const statusIcon = (st) => icon(st, st, statusLabel[st] ?? st);
+const shield = '<span class="shield">' + icon("shield", "") + "administrator</span>";
 
-// Actions need a live server and no other action in flight.
+// Actions need a live server, no other action in flight, and a usable folder.
 function applyEnabled() {
   const ok = online && !busy;
   const why = online ? "" : "Not connected to the installer";
-  [["do-install", canInstall], ["do-uninstall", canUninstall], ["do-doctor", true], ["idir-browse", canInstall]].forEach(([id, allowed]) => {
+  [["do-install", canInstall && dirValid], ["do-uninstall", canUninstall], ["do-doctor", true], ["idir-browse", canInstall]].forEach(([id, allowed]) => {
     $(id).disabled = !(ok && allowed);
-    $(id).title = why;
+    $(id).title = why || (id === "do-install" && !dirValid ? "Fix the install folder first" : "");
   });
 }
 
@@ -203,65 +274,186 @@ async function api(path, body) {
   return res.json();
 }
 
+// POST that answers with newline-delimited JSON events (live steps, then the
+// result). Requests the server rejects outright come back as one plain result.
+async function stream(path, body, onStep) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!(res.headers.get("Content-Type") || "").includes("ndjson")) return res.json();
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "", result = null;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!line) continue;
+      const ev = JSON.parse(line);
+      if (ev.type === "step") onStep(ev.step);
+      else if (ev.type === "result") result = ev.result;
+    }
+  }
+  return result ?? { ok: false, message: "The installer stopped before it finished." };
+}
+
 function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
+
+// ---- install folder: default, editing and validation ----
+function syncDir() {
+  const def = defaultDirs[document.querySelector("input[name=iscope]:checked")?.value] ?? "";
+  if (!dirEdited) $("idir").value = def;
+  $("idir-reset").hidden = $("idir").value === def;
+  validateDir();
+}
+
+let validateSeq = 0, validateTimer;
+function validateDir() {
+  clearTimeout(validateTimer);
+  validateTimer = setTimeout(async () => {
+    const seq = ++validateSeq;
+    let v;
+    try { v = await api("/api/validate", { scope: chosen("iscope"), path: $("idir").value.trim() }); } catch { return; }
+    if (seq === validateSeq) showDirMsg(v); // ignore answers to older keystrokes
+  }, 200);
+}
+
+function showDirMsg(v) {
+  dirValid = !!v.ok;
+  $("idir").setAttribute("aria-invalid", String(!v.ok));
+  const text = v.ok ? v.note : v.message;
+  $("idir-msg").className = "field-msg " + (v.ok ? "note" : "error");
+  $("idir-msg").innerHTML = text ? icon(v.ok ? "info" : "fail", "", v.ok ? "Note" : "Problem") + `<span>${esc(text)}</span>` : "";
+  applyEnabled();
+}
+
+// ---- status ----
+function tile(scope, info, def) {
+  const badge = info
+    ? `<span class="badge ok">${icon("ok", "")}Installed · v${esc(info.version)}</span>`
+    : '<span class="badge none">Not installed</span>';
+  const path = info
+    ? `<code title="${esc(info.installPath)}">${esc(info.installPath)}</code>
+       <button class="copy" type="button" data-copy="${esc(info.installPath)}" title="Copy path" aria-label="Copy path">${icon("copy", "")}</button>`
+    : `<code title="${esc(def)}">Default: ${esc(def)}</code>`;
+  return `<div class="tile"><div class="tile-head"><span class="tile-title">${icon(scopeIcon[scope], "")}${label[scope]}</span>${badge}</div>
+    <div class="tile-path">${path}</div></div>`;
+}
 
 async function refresh() {
   const st = await api("/api/status");
   $("version").textContent = st.version;
-  const row = (k, i) => `<dt>${k}</dt><dd>${i ? `Installed (v${esc(i.version)}) at ${esc(i.installPath)}` : "Not installed"}</dd>`;
-  $("status").innerHTML = row("Current user", st.user) + row("All users", st.machine) +
-    `<dt>Privileges</dt><dd>${st.elevated ? "Administrator" : "Standard user"}</dd>`;
-  if (!st.supported) $("status").innerHTML += "<dt>Note</dt><dd>This installer only supports Windows.</dd>";
+  defaultDirs = st.defaultDirs ?? defaultDirs;
+  $("privileges").innerHTML = st.elevated
+    ? `<span class="chip">${icon("shield", "")}Administrator</span>`
+    : `<span class="chip">${icon("user", "")}Standard user</span>`;
+  $("tiles").innerHTML = tile("user", st.user, defaultDirs.user) + tile("machine", st.machine, defaultDirs.machine);
+  $("platform-note").hidden = st.supported;
+  $("platform-note").textContent = "This installer only supports Windows.";
 
   const found = ["user", "machine"].filter((s) => st[s]);
   $("uninstall-options").innerHTML = found.length
     ? found.map((s, i) => `<label class="opt"><input type="radio" name="uscope" value="${s}" ${i ? "" : "checked"}> ${label[s]}
-        ${s === "machine" ? '<span class="shield">&#9211; administrator</span>' : ""}<small>${esc(st[s].installPath)}</small></label>`).join("")
+        ${s === "machine" ? shield : ""}<small>${esc(st[s].installPath)}</small></label>`).join("")
     : '<p class="note">S-Lab is not installed.</p>';
-  defaultDirs = st.defaultDirs ?? defaultDirs;
   syncDir();
   canUninstall = found.length > 0;
   canInstall = st.supported;
   applyEnabled();
 }
 
-function show(r) {
-  const el = $("result");
-  el.classList.remove("hidden");
-  el.innerHTML = `<div class="banner ${r.ok ? "ok" : "bad"}">${esc(r.message)}</div>` +
-    (r.steps?.length ? `<ul class="steps">${r.steps.map((s, i) =>
-      `<li style="--i:${i}"><span class="tag ${esc(s.status)}">${esc(s.status)}</span><span>${esc(s.name)}<div class="detail">${esc(s.detail)}</div></span></li>`).join("")}</ul>` : "");
+// ---- results ----
+const rank = { info: 0, ok: 1, warn: 2, fail: 3 };
+const worst = (steps) => steps.reduce((w, s) => (rank[s.status] > rank[w] ? s.status : w), "info");
+
+function stepRow(s, i) {
+  return `<li class="step ${esc(s.status)}" style="--i:${i}" data-name="${esc(s.name)}">${statusIcon(s.status)}
+    <span class="step-text"><span class="step-name">${esc(s.name)}</span>${s.detail ? `<span class="detail">${esc(s.detail)}</span>` : ""}</span></li>`;
 }
 
-function showWorking(hint) {
+function summaryChips(steps) {
+  const n = (st) => steps.filter((s) => s.status === st).length;
+  const chip = (st, count, word) => `<span class="chip">${icon(st, st)}${count} ${word}</span>`;
+  const [ok, warn, fail] = [n("ok"), n("warn"), n("fail")];
+  return `<div class="chips">${chip("ok", ok, "passed")}${chip("warn", warn, warn === 1 ? "warning" : "warnings")}${chip("fail", fail, "failed")}</div>`;
+}
+
+// animate: stagger the steps in. Skipped when they were just shown live, so
+// the list does not flash again when the result replaces the progress panel.
+function show(r, { animate = true } = {}) {
+  const el = $("result");
+  el.classList.remove("hidden");
+  const steps = r.steps ?? [];
+  const grouped = steps.some((s) => s.group);
+  let body = "";
+  if (grouped) {
+    const groups = new Map();
+    steps.forEach((s) => groups.set(s.group || "General", [...(groups.get(s.group || "General") ?? []), s]));
+    body = summaryChips(steps) + [...groups].map(([name, list]) =>
+      `<div class="group"><h3 class="group-title">${statusIcon(worst(list))}<span>${esc(name)}</span>
+        <span class="count">${list.length} ${list.length === 1 ? "check" : "checks"}</span></h3>
+        <ul class="steps ${animate ? "animate" : ""}">${list.map(stepRow).join("")}</ul></div>`).join("");
+  } else if (steps.length) {
+    body = `<ul class="steps ${animate ? "animate" : ""}">${steps.map(stepRow).join("")}</ul>`;
+  }
+  el.removeAttribute("aria-busy");
+  el.innerHTML = `<div class="banner ${r.ok ? "ok" : "bad"}">${esc(r.message)}</div>` + body;
+}
+
+// ---- live progress panel ----
+function showWorking({ title = "Working…", hint = "Please wait…" }) {
   const el = $("result");
   el.classList.remove("hidden");
   el.setAttribute("aria-busy", "true");
-  el.innerHTML = `<div class="working"><div class="track"><div class="bar"></div></div>
-    <p>${esc(hint)} <span class="elapsed" id="elapsed">0s</span></p></div>`;
+  el.innerHTML = `<div class="working">
+    <div class="working-head"><strong>${esc(title)}</strong><span class="elapsed" id="elapsed">0s</span></div>
+    <div class="track"><div class="bar"></div></div>
+    <p class="hint" id="work-hint">${esc(hint)}</p>
+    <ul class="steps live" id="live"></ul></div>`;
 }
 
-async function run(button, text, fn, hint = "Working, please wait…") {
+function renderLive(s) {
+  const ul = $("live");
+  if (!ul) return;
+  let li = [...ul.children].find((x) => x.dataset.name === s.name);
+  if (!li) {
+    li = document.createElement("li");
+    li.dataset.name = s.name;
+    ul.appendChild(li);
+  }
+  li.className = "step " + s.status;
+  li.innerHTML = statusIcon(s.status) +
+    `<span class="step-text"><span class="step-name">${esc(s.name)}</span>${s.detail ? `<span class="detail">${esc(s.detail)}</span>` : ""}</span>`;
+  $("work-hint").hidden = true; // once steps flow, the "waiting for permission" hint is stale
+}
+
+async function run(button, text, fn, opts = {}) {
   if (busy) return;
   busy = true;
   const started = Date.now();
-  const showTimer = setTimeout(() => {
-    showWorking(hint);
-    tick = setInterval(() => {
-      const e = $("elapsed");
-      if (e) e.textContent = Math.floor((Date.now() - started) / 1000) + "s";
-    }, 500);
-  }, 400);
-  let tick;
+  const seen = new Map(); // latest state of each step, kept until the panel is on screen
+  let panel = false;
+  const showPanel = () => { if (!panel) { panel = true; showWorking(opts); seen.forEach(renderLive); } };
+  const onStep = (s) => { seen.set(s.name, s); if (panel) renderLive(s); };
+  const showTimer = setTimeout(showPanel, 400); // quick actions never flash a panel
+  const tick = setInterval(() => {
+    const e = $("elapsed");
+    if (e) e.textContent = Math.floor((Date.now() - started) / 1000) + "s";
+  }, 500);
   const orig = button.textContent;
   button.textContent = text;
   button.classList.add("busy");
   applyEnabled();
-  try { show(await fn()); }
-  catch (e) { show({ ok: false, message: "Request failed: " + e.message }); }
+
+  let result;
+  try { result = await fn(onStep); }
+  catch (e) { result = { ok: false, message: "Request failed: " + e.message }; }
+
   clearTimeout(showTimer);
   clearInterval(tick);
-  $("result").removeAttribute("aria-busy");
+  show(result, { animate: !panel });
   busy = false;
   button.textContent = orig;
   button.classList.remove("busy");
@@ -281,7 +473,6 @@ $("idir-browse").onclick = async (e) => {
   const button = e.target;
   busy = true; // no other action while the dialog is open
   button.textContent = "Choose a folder…";
-  button.classList.add("busy");
   $("idir").disabled = true;
   applyEnabled();
   try {
@@ -296,7 +487,6 @@ $("idir-browse").onclick = async (e) => {
   }
   busy = false;
   button.textContent = "Browse…";
-  button.classList.remove("busy");
   $("idir").disabled = false;
   syncDir();
   applyEnabled();
@@ -306,16 +496,29 @@ $("idir-reset").onclick = () => { dirEdited = false; syncDir(); $("idir").focus(
 $("do-install").onclick = (e) => {
   const scope = chosen("iscope");
   const path = $("idir").value.trim();
-  run(e.target, scope === "machine" ? "Waiting for permission…" : "Installing…", () => api("/api/install", { scope, path }),
-    scope === "machine" ? "Approve the Windows permission prompt, then the install continues." : "Installing S-Lab…");
+  run(e.target, scope === "machine" ? "Waiting for permission…" : "Installing…",
+    (onStep) => stream("/api/install", { scope, path }, onStep),
+    { title: "Installing S-Lab", hint: scope === "machine" ? "Approve the Windows permission prompt, then the install continues." : "Starting…" });
 };
 $("do-uninstall").onclick = (e) => {
   const scope = chosen("uscope");
   if (scope && confirm(`Uninstall S-Lab for ${label[scope].toLowerCase()}?`))
-    run(e.target, "Uninstalling…", () => api("/api/uninstall", { scope }),
-      scope === "machine" ? "Approve the Windows permission prompt, then the uninstall continues." : "Removing S-Lab…");
+    run(e.target, "Uninstalling…", (onStep) => stream("/api/uninstall", { scope }, onStep),
+      { title: "Uninstalling S-Lab", hint: scope === "machine" ? "Approve the Windows permission prompt, then the uninstall continues." : "Starting…" });
 };
-$("do-doctor").onclick = (e) => run(e.target, "Checking…", () => api("/api/doctor"), "Running diagnostics…");
+$("do-doctor").onclick = (e) => run(e.target, "Checking…", () => api("/api/doctor"), { title: "Running diagnostics", hint: "Checking every installation…" });
+
+// Copy buttons next to installed paths.
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-copy]");
+  if (!btn) return;
+  try {
+    await navigator.clipboard.writeText(btn.dataset.copy);
+    btn.classList.add("copied");
+    btn.innerHTML = icon("ok", "");
+    setTimeout(() => { btn.classList.remove("copied"); btn.innerHTML = icon("copy", ""); }, 1200);
+  } catch {}
+});
 
 document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
   document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b));
@@ -369,7 +572,7 @@ function setConn(state, text) {
 session.onopen = () => {
   clearTimeout(downTimer);
   setConn("connected", "Connected");
-  refresh();
+  refresh().catch(() => {});
 };
 session.onerror = () => {
   // The browser retries on its own; call it stopped if that keeps failing.

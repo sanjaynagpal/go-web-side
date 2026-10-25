@@ -58,6 +58,13 @@ Direct commands exit with status 1 if the action did not succeed. Set
   removes the registry keys and the installed `slab.exe`. Because the folder may
   be one you picked, it never deletes the folder wholesale: it removes the
   folder only if it is empty afterwards and otherwise leaves your other files.
+- **Live progress.** In the web UI each install/uninstall step appears in a
+  checklist as it happens (the server streams newline-delimited JSON; for an
+  all-users install the elevated helper reports through a temp file the server
+  follows). Steps are paced by a short delay (`installer.StepDelay`) so the
+  progress is visible; the terminal CLI turns that delay off.
+- **Folder validation.** The Install tab checks the folder as you type (the same
+  rules the installer uses) and disables Install until it is usable.
 - **Doctor** is read-only. It checks the registry record, version, install
   folder, that `slab.exe` matches the copy embedded in the installer, and the
   Settings > Apps entry, and warns if both a per-user and an all-users install
