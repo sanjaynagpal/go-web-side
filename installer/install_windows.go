@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/sys/windows/registry"
@@ -60,7 +61,7 @@ func detect(s Scope) *Info {
 	}
 }
 
-func doInstall(s Scope) Result {
+func doInstall(s Scope, dir string) Result {
 	var steps []Step
 	add := func(name, status, detail string) { steps = append(steps, Step{name, status, detail}) }
 	fail := func(name string, err error) Result {
@@ -68,8 +69,12 @@ func doInstall(s Scope) Result {
 		return Result{Message: "Installation failed: " + err.Error(), Steps: steps}
 	}
 
-	dir := defaultDir(s)
-	if prev := detect(s); prev != nil {
+	dir, err := ResolveDir(s, dir)
+	if err != nil {
+		return Result{Message: capitalize(err.Error())}
+	}
+	prev := detect(s)
+	if prev != nil {
 		add("Existing installation", "info", fmt.Sprintf("version %s will be replaced", prev.Version))
 	}
 
@@ -89,6 +94,11 @@ func doInstall(s Scope) Result {
 		return fail("Write registry", err)
 	}
 	add("Write registry", "ok", rootName(s)+`\`+appKey)
+
+	// Reinstalling into a different folder moves the app: drop the old copy.
+	if prev != nil && prev.InstallPath != "" && !strings.EqualFold(filepath.Clean(prev.InstallPath), dir) {
+		add("Remove previous copy", "info", removeInstalled(prev.InstallPath))
+	}
 
 	return Result{
 		OK:      true,
@@ -153,17 +163,17 @@ func doUninstall(s Scope) Result {
 		return Result{Message: "S-Lab is not installed for " + scopeLabel(s) + ".", Steps: steps}
 	}
 
-	// The path comes from the registry, so refuse to delete anything that
-	// is not an S-Lab directory.
-	if filepath.Base(info.InstallPath) != dirName {
-		add("Remove files", "fail", fmt.Sprintf("refusing to delete %q: not an %s directory", info.InstallPath, dirName))
-		return Result{Message: "Uninstall stopped: the recorded install path looks wrong.", Steps: steps}
+	// The folder may be one the user chose, so remove only the file we
+	// installed, and the folder itself only if that leaves it empty.
+	if info.InstallPath != "" {
+		exe := filepath.Join(info.InstallPath, exeName)
+		if err := os.Remove(exe); err != nil && !errors.Is(err, os.ErrNotExist) {
+			add("Remove files", "fail", err.Error())
+			return Result{Message: "Uninstall failed: " + err.Error() + " (is S-Lab running?)", Steps: steps}
+		}
+		add("Remove files", "ok", exe)
+		add("Remove folder", "info", removeFolderIfEmpty(info.InstallPath))
 	}
-	if err := os.RemoveAll(info.InstallPath); err != nil {
-		add("Remove files", "fail", err.Error())
-		return Result{Message: "Uninstall failed: " + err.Error() + " (is S-Lab running?)", Steps: steps}
-	}
-	add("Remove files", "ok", info.InstallPath)
 
 	for _, key := range []string{uninstallKey, appKey} {
 		if err := registry.DeleteKey(root(s), key); err != nil && !errors.Is(err, registry.ErrNotExist) {
@@ -173,6 +183,25 @@ func doUninstall(s Scope) Result {
 		add("Remove registry key", "ok", rootName(s)+`\`+key)
 	}
 	return Result{OK: true, Message: "S-Lab was uninstalled for " + scopeLabel(s) + ".", Steps: steps}
+}
+
+// removeInstalled deletes the S-Lab executable from dir and the folder if empty.
+func removeInstalled(dir string) string {
+	if err := os.Remove(filepath.Join(dir, exeName)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Sprintf("could not remove %s from %s: %v", exeName, dir, err)
+	}
+	return removeFolderIfEmpty(dir)
+}
+
+// removeFolderIfEmpty removes dir only if nothing else is in it, and says what happened.
+func removeFolderIfEmpty(dir string) string {
+	if err := os.Remove(dir); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return dir + " was already gone"
+		}
+		return dir + " left in place (not empty)"
+	}
+	return dir + " removed"
 }
 
 func doDoctor() Result {

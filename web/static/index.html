@@ -85,6 +85,15 @@
     label.opt:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
     label.opt small { display: block; color: var(--muted); margin-left: 24px; }
     .shield { color: var(--warn); }
+    .field { display: block; margin: 14px 0 6px; font-weight: 600; }
+    .path-row { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .path-row input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+      background: var(--bg); color: var(--text); font: 13px ui-monospace, "Cascadia Mono", Consolas, monospace;
+      transition: border-color .2s; }
+    .path-row input:focus { outline: none; border-color: var(--accent); }
+    button.link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+    button.link:hover { text-decoration: underline; }
+    button.link[hidden] { display: none; }
     button.primary { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 8px; padding: 9px 18px; font: inherit; font-weight: 600; cursor: pointer; transition: filter .2s, opacity .2s; }
     button.primary:hover:not(:disabled) { filter: brightness(1.1); }
     button.primary:active:not(:disabled) { filter: brightness(.92); }
@@ -138,6 +147,11 @@
       <small>Installs to your profile. No administrator permission needed.</small></label>
     <label class="opt"><input type="radio" name="iscope" value="machine"> For all users on this computer <span class="shield">&#9211; administrator</span>
       <small>Installs to Program Files. Windows will ask for permission.</small></label>
+    <label class="field" for="idir">Install folder</label>
+    <div class="path-row">
+      <input id="idir" type="text" spellcheck="false" autocomplete="off" placeholder="Folder to install into">
+      <button type="button" class="link" id="idir-reset" hidden>Use default</button>
+    </div>
     <button class="primary" id="do-install">Install</button>
   </section>
 
@@ -159,6 +173,14 @@ const $ = (id) => document.getElementById(id);
 const label = { user: "Current user", machine: "All users" };
 let busy = false;
 let online = false, canInstall = false, canUninstall = false;
+let defaultDirs = { user: "", machine: "" };
+let dirEdited = false; // once the user types, stop overwriting the folder when the scope changes
+
+function syncDir() {
+  const def = defaultDirs[document.querySelector("input[name=iscope]:checked")?.value] ?? "";
+  if (!dirEdited) $("idir").value = def;
+  $("idir-reset").hidden = $("idir").value === def;
+}
 
 // Actions need a live server and no other action in flight.
 function applyEnabled() {
@@ -192,6 +214,8 @@ async function refresh() {
     ? found.map((s, i) => `<label class="opt"><input type="radio" name="uscope" value="${s}" ${i ? "" : "checked"}> ${label[s]}
         ${s === "machine" ? '<span class="shield">&#9211; administrator</span>' : ""}<small>${esc(st[s].installPath)}</small></label>`).join("")
     : '<p class="note">S-Lab is not installed.</p>';
+  defaultDirs = st.defaultDirs ?? defaultDirs;
+  syncDir();
   canUninstall = found.length > 0;
   canInstall = st.supported;
   applyEnabled();
@@ -243,9 +267,17 @@ async function run(button, text, fn, hint = "Working, please wait…") {
 
 const chosen = (name) => document.querySelector(`input[name=${name}]:checked`)?.value;
 
+document.querySelectorAll("input[name=iscope]").forEach((r) => r.onchange = syncDir);
+$("idir").oninput = () => {
+  dirEdited = $("idir").value !== defaultDirs[chosen("iscope")];
+  syncDir();
+};
+$("idir-reset").onclick = () => { dirEdited = false; syncDir(); $("idir").focus(); };
+
 $("do-install").onclick = (e) => {
   const scope = chosen("iscope");
-  run(e.target, scope === "machine" ? "Waiting for permission…" : "Installing…", () => api("/api/install", { scope }),
+  const path = $("idir").value.trim();
+  run(e.target, scope === "machine" ? "Waiting for permission…" : "Installing…", () => api("/api/install", { scope, path }),
     scope === "machine" ? "Approve the Windows permission prompt, then the install continues." : "Installing S-Lab…");
 };
 $("do-uninstall").onclick = (e) => {

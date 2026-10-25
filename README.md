@@ -34,6 +34,7 @@ and the server exits. Press Ctrl+C to stop it sooner.
 go run . cli                         # interactive menu
 go run . cli install                 # for the current user (default)
 go run . cli install -scope machine  # for all users (asks for administrator permission)
+go run . cli install -path "D:\My Apps\S-Lab"   # custom install folder
 go run . cli uninstall [-scope user|machine]
 go run . cli doctor
 ```
@@ -47,8 +48,14 @@ Direct commands exit with status 1 if the action did not succeed. Set
   for all users (`%ProgramFiles%\S-Lab`, `HKLM`). Installing for all users
   needs elevation: the server stays unelevated and relaunches the CLI as a
   hidden `worker` through a UAC prompt. If you decline, nothing changes.
-- **Uninstall** reads the registry record, removes the files and registry keys.
-  It refuses to delete a recorded path whose folder is not named `S-Lab`.
+  The install folder can be changed (the "Install folder" field in the UI, or
+  `cli install -path`). It must be a full local path, not a drive root or a
+  network share; this is checked before any UAC prompt. Installing again into a
+  different folder moves the app and removes the old copy.
+- **Uninstall** reads the registry record (which includes the chosen folder) and
+  removes the registry keys and the installed `slab.exe`. Because the folder may
+  be one you picked, it never deletes the folder wholesale: it removes the
+  folder only if it is empty afterwards and otherwise leaves your other files.
 - **Doctor** is read-only. It checks the registry record, version, install
   folder, that `slab.exe` matches the copy embedded in the installer, and the
   Settings > Apps entry, and warns if both a per-user and an all-users install

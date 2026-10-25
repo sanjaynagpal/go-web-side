@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 // Version is the version of S-Lab carried in this installer.
@@ -65,6 +67,9 @@ type Status struct {
 	Version   string `json:"version"`
 	User      *Info  `json:"user"`
 	Machine   *Info  `json:"machine"`
+
+	// DefaultDirs is where each scope installs unless told otherwise.
+	DefaultDirs map[Scope]string `json:"defaultDirs"`
 }
 
 var errElevationDeclined = errors.New("elevation was declined")
@@ -77,25 +82,58 @@ func GetStatus() Status {
 		Version:   Version,
 		User:      detect(ScopeUser),
 		Machine:   detect(ScopeMachine),
+		DefaultDirs: map[Scope]string{
+			ScopeUser:    defaultDir(ScopeUser),
+			ScopeMachine: defaultDir(ScopeMachine),
+		},
 	}
 }
 
-// Install installs S-Lab for scope, prompting for elevation if needed.
-func Install(scope Scope) Result {
-	return withElevation(scope, "install", doInstall)
+// ResolveDir returns the folder to install into: the scope's default when dir
+// is empty, otherwise dir cleaned and checked. It rejects anything that is not
+// a full local path to a folder, so mistakes are reported before any elevation.
+func ResolveDir(scope Scope, dir string) (string, error) {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return defaultDir(scope), nil
+	}
+	dir = filepath.Clean(dir)
+	switch {
+	case !filepath.IsAbs(dir):
+		return "", fmt.Errorf(`the install folder must be a full path such as C:\Apps\S-Lab (got %q)`, dir)
+	case strings.HasPrefix(dir, `\\`):
+		return "", errors.New("network folders are not supported; choose a folder on this computer")
+	case filepath.Dir(dir) == dir:
+		return "", fmt.Errorf("choose a folder, not the whole drive %s", dir)
+	}
+	if fi, err := os.Stat(dir); err == nil && !fi.IsDir() {
+		return "", fmt.Errorf("%s is a file, not a folder", dir)
+	}
+	return dir, nil
+}
+
+// Install installs S-Lab for scope into dir (empty means the scope's default
+// folder), prompting for elevation if needed.
+func Install(scope Scope, dir string) Result {
+	dir, err := ResolveDir(scope, dir)
+	if err != nil {
+		return Result{Message: capitalize(err.Error())}
+	}
+	return withElevation(scope, "install", []string{"-path", dir}, func(s Scope) Result { return doInstall(s, dir) })
 }
 
 // Uninstall removes the S-Lab installation for scope, prompting for elevation if needed.
 func Uninstall(scope Scope) Result {
-	return withElevation(scope, "uninstall", doUninstall)
+	return withElevation(scope, "uninstall", nil, doUninstall)
 }
 
 // Doctor runs read-only diagnostics over every installation found.
 func Doctor() Result { return doDoctor() }
 
 // withElevation runs fn directly, or in an elevated worker process when the
-// machine scope is requested without administrator rights.
-func withElevation(scope Scope, action string, fn func(Scope) Result) Result {
+// machine scope is requested without administrator rights. extra holds
+// additional worker arguments to pass along.
+func withElevation(scope Scope, action string, extra []string, fn func(Scope) Result) Result {
 	if !supported {
 		return unsupported()
 	}
@@ -111,7 +149,8 @@ func withElevation(scope Scope, action string, fn func(Scope) Result) Result {
 	f.Close()
 	defer os.Remove(path)
 
-	if err := runElevated([]string{"worker", action, "-scope", string(scope), "-result", path}); err != nil {
+	args := append([]string{"worker", action, "-scope", string(scope), "-result", path}, extra...)
+	if err := runElevated(args); err != nil {
 		if errors.Is(err, errElevationDeclined) {
 			return Result{Message: "Administrator permission was declined, so nothing was changed."}
 		}
@@ -128,19 +167,19 @@ func withElevation(scope Scope, action string, fn func(Scope) Result) Result {
 	return r
 }
 
-// RunWorker is the entry point for `worker <action> -scope <scope>`. With a
+// RunWorker is the entry point for `worker <action> -scope <scope> [-path dir]`. With a
 // result path it runs the action directly (it is the elevated child) and
 // writes JSON there; without one it behaves like a normal CLI call and
 // elevates itself if required (used by the Apps & features uninstall entry).
-func RunWorker(action string, scope Scope, resultPath string) error {
+func RunWorker(action string, scope Scope, dir, resultPath string) error {
 	var r Result
 	switch {
 	case action == "install" && resultPath != "":
-		r = doInstall(scope)
+		r = doInstall(scope, dir)
 	case action == "uninstall" && resultPath != "":
 		r = doUninstall(scope)
 	case action == "install":
-		r = Install(scope)
+		r = Install(scope, dir)
 	case action == "uninstall":
 		r = Uninstall(scope)
 	default:
@@ -161,6 +200,13 @@ func RunWorker(action string, scope Scope, resultPath string) error {
 		return errors.New(r.Message)
 	}
 	return nil
+}
+
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:] + "."
 }
 
 func failure(msg string, err error) Result {

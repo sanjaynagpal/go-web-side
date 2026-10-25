@@ -41,7 +41,9 @@ func Handler(host string, onIdle func()) (http.Handler, error) {
 		writeJSON(w, http.StatusOK, installer.Doctor())
 	})
 	mux.HandleFunc("POST /api/install", scoped(&busy, installer.Install))
-	mux.HandleFunc("POST /api/uninstall", scoped(&busy, installer.Uninstall))
+	mux.HandleFunc("POST /api/uninstall", scoped(&busy, func(s installer.Scope, _ string) installer.Result {
+		return installer.Uninstall(s)
+	}))
 
 	return guard(host, mux), nil
 }
@@ -110,11 +112,13 @@ func (t *tracker) disconnect() {
 	}
 }
 
-// scoped adapts an installer action that takes {"scope": "..."} to a handler.
-func scoped(busy *sync.Mutex, action func(installer.Scope) installer.Result) http.HandlerFunc {
+// scoped adapts an installer action that takes {"scope": "...", "path": "..."}
+// (path optional) to a handler.
+func scoped(busy *sync.Mutex, action func(installer.Scope, string) installer.Result) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Scope string `json:"scope"`
+			Path  string `json:"path"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, installer.Result{Message: "Invalid request body."})
@@ -130,7 +134,7 @@ func scoped(busy *sync.Mutex, action func(installer.Scope) installer.Result) htt
 			return
 		}
 		defer busy.Unlock()
-		writeJSON(w, http.StatusOK, action(scope))
+		writeJSON(w, http.StatusOK, action(scope, req.Path))
 	}
 }
 

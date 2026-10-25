@@ -43,14 +43,15 @@ func main() {
 	}
 }
 
-// worker runs `worker <install|uninstall> -scope <user|machine> [-result file]`
+// worker runs `worker <install|uninstall> -scope <user|machine> [-path dir] [-result file]`
 // without the web UI. The installer re-runs itself this way when elevated.
 func worker(args []string) error {
 	if len(args) < 1 {
-		return errors.New("usage: worker <install|uninstall> -scope <user|machine> [-result file]")
+		return errors.New("usage: worker <install|uninstall> -scope <user|machine> [-path dir] [-result file]")
 	}
 	fs := flag.NewFlagSet("worker", flag.ContinueOnError)
 	scopeFlag := fs.String("scope", "user", "user or machine")
+	path := fs.String("path", "", "install folder (default: the scope's standard location)")
 	result := fs.String("result", "", "file to write the JSON result to")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
@@ -59,7 +60,7 @@ func worker(args []string) error {
 	if err != nil {
 		return err
 	}
-	return installer.RunWorker(args[0], scope, *result)
+	return installer.RunWorker(args[0], scope, *path, *result)
 }
 
 func run(port int, openBrowser, keepAlive bool) error {

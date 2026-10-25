@@ -14,7 +14,7 @@ import (
 
 const cliUsage = `usage:
   go-web-side cli                                   interactive menu
-  go-web-side cli install   [-scope user|machine]   (default: user)
+  go-web-side cli install   [-scope user|machine] [-path folder]   (default scope: user)
   go-web-side cli uninstall [-scope user|machine]   (default: whichever is installed)
   go-web-side cli doctor`
 
@@ -28,6 +28,7 @@ func cli(args []string) error {
 
 	fs := flag.NewFlagSet("cli", flag.ContinueOnError)
 	scopeFlag := fs.String("scope", "", "user or machine")
+	pathFlag := fs.String("path", "", "install folder (install only; default: the scope's standard location)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -45,7 +46,7 @@ func cli(args []string) error {
 		if scope == "" {
 			scope = installer.ScopeUser
 		}
-		r = installer.Install(scope)
+		r = installer.Install(scope, *pathFlag)
 	case "uninstall":
 		if scope == "" {
 			st := installer.GetStatus()
@@ -116,13 +117,25 @@ func menuInstall(in *bufio.Reader) error {
 	if err != nil {
 		return err
 	}
+	var scope installer.Scope
 	switch choice {
 	case "1":
-		printResult(installer.Install(installer.ScopeUser))
+		scope = installer.ScopeUser
 	case "2":
-		fmt.Println("Waiting for administrator permission...")
-		printResult(installer.Install(installer.ScopeMachine))
+		scope = installer.ScopeMachine
+	default:
+		return nil
 	}
+
+	def := installer.GetStatus().DefaultDirs[scope]
+	dir, err := ask(in, fmt.Sprintf("Install folder %s: ", dim("["+def+"]")))
+	if err != nil {
+		return err
+	}
+	if scope == installer.ScopeMachine {
+		fmt.Println("Waiting for administrator permission...")
+	}
+	printResult(installer.Install(scope, dir))
 	return nil
 }
 
