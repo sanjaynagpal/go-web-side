@@ -4,3 +4,4 @@
 
 # Never touch binaries.
 *.exe binary
+*.woff2 binary

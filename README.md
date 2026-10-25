@@ -89,6 +89,15 @@ helper that deletes it (and the folder, if empty) as soon as it has exited.
 | `installer/`            | Install, uninstall and doctor logic; embeds the S-Lab payload  |
 | `cmd/slab/`             | Placeholder S-Lab application that gets embedded               |
 
+## Look and feel
+
+The UI uses a teal accent with a soft tint for each status colour, light and dark
+themes, and three typefaces: Bricolage Grotesque (headings), IBM Plex Sans (text)
+and IBM Plex Mono (paths and labels). The fonts are embedded in the binary
+(`web/static/fonts`), so the installer works offline and makes no requests to
+the internet. All of them are licensed under the SIL Open Font License 1.1; the
+licence texts are in that folder.
+
 ## Security notes
 
 The server listens on `127.0.0.1` only. It rejects requests whose `Host` or
