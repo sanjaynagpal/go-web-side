@@ -1,0 +1,162 @@
+// Package web serves the embedded browser UI and its JSON API.
+package web
+
+import (
+	"embed"
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"sync"
+	"time"
+
+	"go-web-side/installer"
+)
+
+//go:embed static
+var staticFS embed.FS
+
+// Handler returns the HTTP handler for the web UI and API. host is the
+// address the server listens on (e.g. "127.0.0.1:5000"); requests that
+// arrive for any other Host or from any other Origin are rejected, so web
+// pages from elsewhere cannot drive the installer through localhost.
+//
+// If onIdle is non-nil it is called once the page has been connected and then
+// stays gone for idleGrace (the window was closed).
+func Handler(host string, onIdle func()) (http.Handler, error) {
+	static, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		return nil, err
+	}
+	sessions := &tracker{grace: idleGrace, onIdle: onIdle}
+
+	var busy sync.Mutex // one install/uninstall at a time
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.FS(static)))
+	mux.HandleFunc("GET /api/session", sessions.serve)
+	mux.HandleFunc("GET /api/status", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, installer.GetStatus())
+	})
+	mux.HandleFunc("GET /api/doctor", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, installer.Doctor())
+	})
+	mux.HandleFunc("POST /api/install", scoped(&busy, installer.Install))
+	mux.HandleFunc("POST /api/uninstall", scoped(&busy, installer.Uninstall))
+
+	return guard(host, mux), nil
+}
+
+// idleGrace is how long the page may be disconnected (for example while
+// reloading) before it counts as closed.
+const idleGrace = 3 * time.Second
+
+// tracker watches the page's long-lived /api/session connection. Unlike a
+// timer-based heartbeat it is not slowed down when the window is minimized,
+// and the connection drops promptly when the window is closed or killed.
+type tracker struct {
+	grace  time.Duration
+	onIdle func()
+
+	mu    sync.Mutex
+	open  int
+	timer *time.Timer
+}
+
+func (t *tracker) serve(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-store")
+	fmt.Fprint(w, ": connected\n\n")
+	flusher.Flush()
+
+	t.connect()
+	defer t.disconnect()
+
+	tick := time.NewTicker(15 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-tick.C:
+			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
+}
+
+func (t *tracker) connect() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.open++
+	if t.timer != nil {
+		t.timer.Stop()
+		t.timer = nil
+	}
+}
+
+func (t *tracker) disconnect() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.open--
+	if t.open == 0 && t.onIdle != nil {
+		t.timer = time.AfterFunc(t.grace, t.onIdle)
+	}
+}
+
+// scoped adapts an installer action that takes {"scope": "..."} to a handler.
+func scoped(busy *sync.Mutex, action func(installer.Scope) installer.Result) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Scope string `json:"scope"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, installer.Result{Message: "Invalid request body."})
+			return
+		}
+		scope, err := installer.ParseScope(req.Scope)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, installer.Result{Message: err.Error()})
+			return
+		}
+		if !busy.TryLock() {
+			writeJSON(w, http.StatusConflict, installer.Result{Message: "Another operation is already running."})
+			return
+		}
+		defer busy.Unlock()
+		writeJSON(w, http.StatusOK, action(scope))
+	}
+}
+
+// guard rejects requests with a foreign Host or Origin (DNS rebinding and
+// cross-site requests) and non-JSON POSTs (which also forces a CORS preflight).
+func guard(host string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Host != host {
+			http.Error(w, "forbidden host", http.StatusForbidden)
+			return
+		}
+		if o := r.Header.Get("Origin"); o != "" && o != "http://"+host {
+			http.Error(w, "forbidden origin", http.StatusForbidden)
+			return
+		}
+		if r.Method == http.MethodPost && r.Header.Get("Content-Type") != "application/json" {
+			http.Error(w, "content type must be application/json", http.StatusUnsupportedMediaType)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
