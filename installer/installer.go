@@ -91,7 +91,13 @@ type Result struct {
 	OK      bool   `json:"ok"`
 	Message string `json:"message"`
 	Steps   []Step `json:"steps,omitempty"`
+
+	// Code names a failure the UI can offer a way out of; empty otherwise.
+	Code string `json:"code,omitempty"`
 }
+
+// CodeElevationDeclined is the Result.Code when the user refused the UAC prompt.
+const CodeElevationDeclined = "elevation_declined"
 
 // Info is what the registry records about an installation.
 type Info struct {
@@ -271,7 +277,7 @@ wait:
 
 	if runErr != nil {
 		if errors.Is(runErr, errElevationDeclined) {
-			return Result{Message: "Administrator permission was declined, so nothing was changed."}
+			return Result{Message: "Administrator permission was declined, so nothing was changed.", Code: CodeElevationDeclined}
 		}
 		return failure("The elevated helper failed", runErr)
 	}

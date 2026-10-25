@@ -80,7 +80,7 @@ func TestElevationDeclinedAndNoResult(t *testing.T) {
 	never := func(Scope, Progress) Result { return Result{} }
 
 	elevate = func([]string) error { return errElevationDeclined }
-	if r := withElevation(ScopeMachine, "install", nil, nil, never); r.OK || r.Message == "" {
+	if r := withElevation(ScopeMachine, "install", nil, nil, never); r.OK || r.Code != CodeElevationDeclined {
 		t.Errorf("declined: %+v", r)
 	}
 

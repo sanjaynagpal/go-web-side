@@ -15,7 +15,7 @@
       color-scheme: light dark;
       --bg: #f6f7f9; --card: #fff; --text: #1b1f24; --muted: #667085; --line: #e3e6ea;
       --accent: #2557d6; --accent-text: #fff;
-      --ok: #1a7f37; --warn: #9a6700; --fail: #cf222e; --info: #667085;
+      --ok: #1a7f37; --warn: #9a6700; --fail: #cf222e; --info: #667085; --fail-text: #fff;
 
       /* Design tokens: one spacing scale, one type scale, a few radii. */
       --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px;
@@ -28,14 +28,14 @@
       :root:not([data-theme="light"]) {
         --bg: #14171b; --card: #1d2127; --text: #e8eaed; --muted: #9aa3ad; --line: #2c323a;
         --accent: #6c93f5; --accent-text: #0c1220;
-        --ok: #3fb950; --warn: #d29922; --fail: #f85149; --info: #9aa3ad;
+        --ok: #3fb950; --warn: #d29922; --fail: #f85149; --info: #9aa3ad; --fail-text: #14171b;
       }
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
       --bg: #14171b; --card: #1d2127; --text: #e8eaed; --muted: #9aa3ad; --line: #2c323a;
       --accent: #6c93f5; --accent-text: #0c1220;
-      --ok: #3fb950; --warn: #d29922; --fail: #f85149; --info: #9aa3ad;
+      --ok: #3fb950; --warn: #d29922; --fail: #f85149; --info: #9aa3ad; --fail-text: #14171b;
     }
     /* Cross-fade colours while the theme is being switched. */
     :root.theming *, :root.theming *::before, :root.theming *::after {
@@ -197,6 +197,30 @@
     .working .bar { width: 30%; height: 100%; border-radius: 3px; background: var(--accent); animation: slide 1.3s ease-in-out infinite; }
     .working .hint { margin: 10px 0 0; color: var(--muted); }
     .working ul.steps { margin-top: var(--s-2); }
+
+    /* ---- confirmation dialog (native <dialog>: focus trap and Escape come built in) ---- */
+    dialog { width: min(420px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: var(--r-lg);
+      background: var(--card); color: var(--text); box-shadow: 0 20px 50px rgba(0, 0, 0, .35); animation: fade .2s ease-out; }
+    dialog::backdrop { background: rgba(10, 12, 16, .55); animation: fade .2s ease-out; }
+    dialog form { padding: var(--s-5); }
+    .dlg-head { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-2); }
+    .dlg-head .ico { width: 24px; height: 24px; }
+    .dlg-head h2 { margin: 0; font-size: 18px; }
+    dialog p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+    .dlg-actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-5); }
+    button.primary.danger { background: var(--fail); color: var(--fail-text); }
+
+    /* ---- empty states and next steps ---- */
+    .empty { display: flex; align-items: flex-start; gap: var(--s-3); padding: var(--s-1) 0; }
+    .empty > .ico { width: 28px; height: 28px; margin-top: 2px; color: var(--muted); }
+    .empty strong { display: block; }
+    .empty p { margin: 2px 0 var(--s-1); color: var(--muted); }
+    .empty button.link, .next button.link { font-size: var(--fs-md); }
+    .next { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-3) 0 0; color: var(--muted); }
+    .notice { display: flex; align-items: flex-start; gap: var(--s-3); margin: calc(var(--s-2) * -1) 0 var(--s-4); padding: var(--s-3);
+      border: 1px solid var(--fail); border-radius: var(--r-md); color: var(--fail); background: color-mix(in srgb, var(--fail) 8%, transparent); }
+    .notice .ico { margin-top: 2px; }
+    .notice span { color: var(--text); }
   </style>
 </head>
 <body>
@@ -236,6 +260,11 @@
       </button>
     </div>
   </header>
+
+  <div class="notice" id="gone" role="alert" hidden>
+    <svg class="ico fail" aria-hidden="true"><use href="#i-fail"/></svg>
+    <span><strong>The installer has stopped running.</strong> Close this window and start the installer again to continue.</span>
+  </div>
 
   <div class="card" id="status-card">
     <div class="card-head"><span class="eyebrow">Installation status</span><span id="privileges"></span></div>
@@ -278,6 +307,17 @@
   <section id="result" class="card hidden" aria-live="polite"></section>
 </main>
 
+<dialog id="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+  <form method="dialog">
+    <div class="dlg-head"><svg class="ico warn" aria-hidden="true"><use href="#i-warn"/></svg><h2 id="confirm-title"></h2></div>
+    <p id="confirm-body"></p>
+    <div class="dlg-actions">
+      <button class="secondary" value="cancel" autofocus>Cancel</button>
+      <button class="primary danger" id="confirm-ok" value="ok"></button>
+    </div>
+  </form>
+</dialog>
+
 <script>
 const $ = (id) => document.getElementById(id);
 const label = { user: "Current user", machine: "All users" };
@@ -285,6 +325,7 @@ const scopeIcon = { user: "user", machine: "monitor" };
 const statusLabel = { ok: "Passed", warn: "Warning", fail: "Failed", info: "Info", run: "In progress" };
 let busy = false;
 let activeId = null; // id of the button whose action is running
+let installs = { user: null, machine: null }; // what is installed, from the last status
 let online = false, canInstall = false, canUninstall = false, dirValid = true;
 let defaultDirs = { user: "", machine: "" };
 let dirEdited = false; // once the user types, stop overwriting the folder when the scope changes
@@ -404,10 +445,13 @@ async function refresh() {
   $("platform-note").textContent = "This installer only supports Windows.";
 
   const found = ["user", "machine"].filter((s) => st[s]);
+  installs = { user: st.user, machine: st.machine };
   $("uninstall-options").innerHTML = found.length
     ? found.map((s, i) => `<label class="opt"><input type="radio" name="uscope" value="${s}" ${i ? "" : "checked"}> ${label[s]}
         ${s === "machine" ? shield : ""}<small>${esc(st[s].installPath)}</small></label>`).join("")
-    : '<p class="note">S-Lab is not installed.</p>';
+    : `<div class="empty">${icon("install", "")}<div><strong>S-Lab isn't installed</strong>
+        <p>There is nothing to remove yet.</p><button class="link" type="button" data-goto="install">Go to Install →</button></div></div>`;
+  $("why-do-uninstall").closest(".actions").hidden = found.length === 0; // the empty state already says it
   syncDir();
   canUninstall = found.length > 0;
   canInstall = st.supported;
@@ -448,8 +492,15 @@ function show(r, { animate = true } = {}) {
   } else if (steps.length) {
     body = `<ul class="steps ${animate ? "animate" : ""}">${steps.map(stepRow).join("")}</ul>`;
   }
+  // A way forward for results that would otherwise be a dead end.
+  let next = "";
+  if (grouped && !installs.user && !installs.machine) {
+    next = `<p class="next">S-Lab isn't installed yet. <button class="link" type="button" data-goto="install">Install S-Lab →</button></p>`;
+  } else if (r.code === "elevation_declined") {
+    next = `<p class="next">Want to skip the permission prompt? <button class="link" type="button" data-action="just-me">Install just for me instead</button></p>`;
+  }
   el.removeAttribute("aria-busy");
-  el.innerHTML = `<div class="banner ${r.ok ? "ok" : "bad"}">${esc(r.message)}</div>` + body;
+  el.innerHTML = `<div class="banner ${r.ok ? "ok" : "bad"}">${esc(r.message)}</div>` + body + next;
 }
 
 // ---- live progress panel ----
@@ -554,11 +605,31 @@ $("do-install").onclick = (e) => {
     (onStep) => stream("/api/install", { scope, path }, onStep),
     { title: "Installing S-Lab", hint: scope === "machine" ? "Approve the Windows permission prompt, then the install continues." : "Starting…" });
 };
-$("do-uninstall").onclick = (e) => {
+// Resolves true if the user confirms, false on Cancel, Escape or a click outside.
+function confirmDialog({ title, body, okLabel }) {
+  return new Promise((resolve) => {
+    const d = $("confirm");
+    $("confirm-title").textContent = title;
+    $("confirm-body").textContent = body;
+    $("confirm-ok").textContent = okLabel;
+    d.returnValue = "";
+    d.addEventListener("close", () => resolve(d.returnValue === "ok"), { once: true });
+    d.showModal();
+  });
+}
+$("confirm").addEventListener("click", (e) => { if (e.target === $("confirm")) $("confirm").close(); });
+
+$("do-uninstall").onclick = async (e) => {
+  const button = e.currentTarget;
   const scope = chosen("uscope");
-  if (scope && confirm(`Uninstall S-Lab for ${label[scope].toLowerCase()}?`))
-    run(e.target, "Uninstalling…", (onStep) => stream("/api/uninstall", { scope }, onStep),
-      { title: "Uninstalling S-Lab", hint: scope === "machine" ? "Approve the Windows permission prompt, then the uninstall continues." : "Starting…" });
+  if (!scope) return;
+  const ok = await confirmDialog({
+    title: `Uninstall S-Lab for ${label[scope].toLowerCase()}?`,
+    body: `This removes S-Lab from ${installs[scope]?.installPath ?? "this computer"}. Any other files you put in that folder are left alone.`,
+    okLabel: "Uninstall",
+  });
+  if (ok) run(button, "Uninstalling…", (onStep) => stream("/api/uninstall", { scope }, onStep),
+    { title: "Uninstalling S-Lab", hint: scope === "machine" ? "Approve the Windows permission prompt, then the uninstall continues." : "Starting…" });
 };
 $("do-doctor").onclick = (e) => run(e.target, "Checking…", () => api("/api/doctor"), { title: "Running diagnostics", hint: "Checking every installation…" });
 
@@ -574,10 +645,23 @@ document.addEventListener("click", async (e) => {
   } catch {}
 });
 
-document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
-  document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b));
-  ["install", "uninstall", "doctor"].forEach((id) => $(id).classList.toggle("hidden", id !== b.dataset.tab));
+function goTab(name) {
+  document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", x.dataset.tab === name));
+  ["install", "uninstall", "doctor"].forEach((id) => $(id).classList.toggle("hidden", id !== name));
   $("result").classList.add("hidden");
+}
+document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => goTab(b.dataset.tab));
+
+// "Next step" links inside empty states and results.
+document.addEventListener("click", (e) => {
+  const go = e.target.closest("[data-goto]");
+  if (go) { goTab(go.dataset.goto); return; }
+  if (e.target.closest("[data-action=just-me]")) {
+    document.querySelector("input[name=iscope][value=user]").checked = true;
+    goTab("install");
+    syncDir();
+    $("do-install").focus();
+  }
 });
 
 // Theme: follows the system until the user picks one, then remembers it.
@@ -616,23 +700,28 @@ new ResizeObserver(() => { clearTimeout(fitTimer); fitTimer = setTimeout(fitWind
 // An open connection tells the server this window is alive; when the window
 // closes the connection drops and the CLI shuts down. (Reconnects are automatic.)
 const session = new EventSource("/api/session");
-let downTimer;
+let downTimer = null, stopped = false;
 function setConn(state, text) {
   $("conn").className = "conn " + state;
   $("conn-text").textContent = text;
   online = state === "connected";
+  $("gone").hidden = state !== "disconnected";
   applyEnabled();
 }
 session.onopen = () => {
   clearTimeout(downTimer);
+  downTimer = null;
+  stopped = false;
   setConn("connected", "Connected");
   refresh().catch(() => {});
 };
 session.onerror = () => {
-  // The browser retries on its own; call it stopped if that keeps failing.
+  // The browser retries on its own, and every failed retry lands here. Start the
+  // countdown once (not per retry) and, once stopped, stay stopped until a
+  // retry succeeds.
+  if (stopped) return;
   setConn("connecting", "Reconnecting…");
-  clearTimeout(downTimer);
-  downTimer = setTimeout(() => setConn("disconnected", "Server stopped"), 8000);
+  downTimer ??= setTimeout(() => { stopped = true; setConn("disconnected", "Server stopped"); }, 8000);
 };
 
 applyEnabled(); // disabled until the session connects
